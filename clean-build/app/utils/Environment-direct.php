@@ -2,7 +2,6 @@
 
 class Environment 
 {
-    private static $variables = [];
     private static $loaded = false;
 
     public static function load($path = null) 
@@ -10,16 +9,22 @@ class Environment
         if (self::$loaded) {
             return;
         }
-
-        // より確実な.envファイルの検索
+        
+        // 直接設定ファイルを優先して読み込み
+        $config_direct = dirname(dirname(__DIR__)) . '/config-direct.php';
+        if (file_exists($config_direct)) {
+            require_once $config_direct;
+            self::$loaded = true;
+            return;
+        }
+        
+        // .envファイルからの読み込み（フォールバック）
         if ($path === null) {
-            // 複数のパターンを試す
             $possible_paths = [
-                __DIR__ . '/../../.env',           // 通常のパス
-                dirname(dirname(__DIR__)) . '/.env', // より安全なパス  
-                $_SERVER['DOCUMENT_ROOT'] . '/../.env',  // Document rootの上
-                getcwd() . '/.env',                // 現在のディレクトリ
-                dirname($_SERVER['SCRIPT_FILENAME']) . '/.env', // 実行ファイルと同じディレクトリ
+                dirname(dirname(__DIR__)) . '/.env',
+                __DIR__ . '/../../.env',
+                dirname($_SERVER['SCRIPT_FILENAME']) . '/.env',
+                getcwd() . '/.env',
             ];
             
             $path = null;
@@ -30,18 +35,8 @@ class Environment
                 }
             }
             
-            // それでも見つからない場合は、実行時に詳細情報を表示
             if ($path === null) {
-                $debug_info = "Environment file not found. Searched paths:\n";
-                foreach ($possible_paths as $i => $test_path) {
-                    $debug_info .= ($i + 1) . ". " . $test_path . " - " . (file_exists($test_path) ? "EXISTS" : "NOT FOUND") . "\n";
-                }
-                $debug_info .= "\nCurrent working directory: " . getcwd() . "\n";
-                $debug_info .= "Script filename: " . $_SERVER['SCRIPT_FILENAME'] . "\n";
-                $debug_info .= "__DIR__: " . __DIR__ . "\n";
-                $debug_info .= "DOCUMENT_ROOT: " . ($_SERVER['DOCUMENT_ROOT'] ?? 'NOT SET') . "\n";
-                
-                throw new Exception($debug_info);
+                throw new Exception("Neither config-direct.php nor .env file found. Please ensure configuration file exists.");
             }
         }
 
@@ -71,7 +66,7 @@ class Environment
                     $value = substr($value, 1, -1);
                 }
                 
-                self::$variables[$key] = $value;
+                $_ENV[$key] = $value;
             }
         }
         
@@ -84,7 +79,7 @@ class Environment
             self::load();
         }
         
-        return isset(self::$variables[$key]) ? self::$variables[$key] : $default;
+        return isset($_ENV[$key]) ? $_ENV[$key] : $default;
     }
 
     public static function isDevelopment() 
@@ -95,16 +90,5 @@ class Environment
     public static function isDebug() 
     {
         return self::get('APP_DEBUG', 'false') === 'true';
-    }
-    
-    // デバッグ用メソッド
-    public static function getLoadedPath()
-    {
-        return self::$loaded;
-    }
-    
-    public static function getAllVariables()
-    {
-        return self::$variables;
     }
 }
