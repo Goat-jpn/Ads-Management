@@ -1,0 +1,115 @@
+# 広告管理システム - ads_reports デプロイファイル一覧
+
+## アップロード先ディレクトリ
+/public_html/app/ads_reports/
+
+## ファイル構成
+```
+ads_reports/
+├── .env (ads_reports用設定)
+├── .htaccess (URL rewrite設定)
+├── index.php (メインダッシュボード)
+├── clients.php (クライアント管理)
+├── bootstrap.php (オートローダー)
+├── composer.json
+├── DATABASE_SETUP.sql (DB初期化)
+├── check-deployment.php (デプロイ確認ツール)
+├── DEPLOYMENT_README.md (デプロイ手順)
+├── FILE_LIST.txt (このファイル)
+│
+├── api/
+│   ├── dashboard/
+│   │   └── data.php (ダッシュボードAPI)
+│   └── clients/
+│       └── index.php (クライアントAPI)
+│
+├── app/
+│   ├── controllers/
+│   │   ├── BaseController.php
+│   │   ├── ClientController.php
+│   │   └── DashboardController.php
+│   ├── models/
+│   │   ├── BaseModel.php
+│   │   ├── Client.php
+│   │   ├── AdAccount.php
+│   │   ├── DailyAdData.php
+│   │   ├── FeeSetting.php
+│   │   ├── CostMarkup.php
+│   │   ├── Invoice.php
+│   │   ├── InvoiceItem.php
+│   │   ├── MonthlySummary.php
+│   │   ├── SyncLog.php
+│   │   └── TieredFee.php
+│   ├── services/
+│   │   ├── GoogleAdsService.php
+│   │   └── YahooAdsService.php
+│   └── utils/
+│       ├── Environment.php
+│       └── Logger.php
+│
+├── config/
+│   ├── app.php
+│   ├── api/
+│   │   └── google_ads_php.ini
+│   └── database/
+│       └── Connection.php
+│
+├── database/
+│   ├── schema.sql
+│   └── initial_data.sql
+│
+├── public/
+│   ├── index.php
+│   ├── css/
+│   ├── js/
+│   ├── assets/
+│   └── admin/
+│
+└── logs/ (権限: 755)
+```
+
+## 重要な設定ファイル
+
+### .env (ads_reports用)
+```
+APP_URL=https://app.kanho.co.jp/ads_reports
+DOCUMENT_ROOT=/home/app@kanho.co.jp/kanho.co.jp/public_html/app/ads_reports/
+```
+
+### .htaccess (URL rewrite)
+```
+# /ads_reports/api/dashboard/data -> /ads_reports/api/dashboard/data.php
+# /ads_reports/clients -> /ads_reports/clients.php
+```
+
+## アクセスURL
+
+### メインページ
+- https://app.kanho.co.jp/ads_reports/ (ダッシュボード)
+- https://app.kanho.co.jp/ads_reports/clients (クライアント管理)
+
+### API
+- https://app.kanho.co.jp/ads_reports/api/dashboard/data
+- https://app.kanho.co.jp/ads_reports/api/clients
+
+### デプロイ確認
+- https://app.kanho.co.jp/ads_reports/check-deployment.php
+
+## デプロイ手順
+
+1. FTP接続: sv301.xbiz.ne.jp (app@kanho.co.jp)
+2. アップロード先: /public_html/app/ads_reports/
+3. 全ファイルアップロード
+4. DATABASE_SETUP.sql 実行
+5. https://app.kanho.co.jp/ads_reports/check-deployment.php で確認
+6. https://app.kanho.co.jp/ads_reports/ で動作確認
+
+## 完了チェック
+- [ ] DB接続OK表示
+- [ ] ダッシュボード統計表示  
+- [ ] クライアント一覧表示
+- [ ] API正常レスポンス
+- [ ] ナビゲーション動作
+
+総ファイル数: 40ファイル
+パッケージサイズ: 70KB

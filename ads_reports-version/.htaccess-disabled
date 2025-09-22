@@ -1,0 +1,8 @@
+# .htaccess 完全無効化版
+# 500エラーが .htaccess 原因の場合用
+
+# すべてコメントアウト状態
+# 基本的な設定も無効化
+
+# AddDefaultCharset UTF-8
+# Options -Indexes
