@@ -1,0 +1,46 @@
+# 環境設定ファイル
+.env
+.env.local
+.env.production
+
+# 依存関係
+/vendor/
+composer.lock
+
+# ログファイル
+/logs/*.log
+/logs/*.txt
+
+# キャッシュ
+/storage/cache/*
+/storage/sessions/*
+/storage/temp/*
+
+# アップロードファイル
+/storage/uploads/*
+
+# IDEファイル
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS生成ファイル
+.DS_Store
+Thumbs.db
+
+# 一時ファイル
+*.tmp
+*.temp
+
+# テストカバレッジ
+coverage/
+.phpunit.result.cache
+
+# API認証情報（セキュリティ）
+config/api/google_ads_php.ini
+config/api/yahoo_credentials.json
+
+# データベース
+*.sqlite
+*.db
