@@ -5,8 +5,9 @@ ini_set('display_errors', 1);
 date_default_timezone_set('Asia/Tokyo');
 
 // 必要なファイルの読み込み
-require_once __DIR__ . '/app/utils/Environment.php';
-require_once __DIR__ . '/config/database/Connection.php';
+require_once __DIR__ . '/config-localhost.php';
+require_once __DIR__ . '/app/utils/Environment-direct.php';
+require_once __DIR__ . '/config/database/Connection-direct.php';
 
 try {
     Environment::load();
