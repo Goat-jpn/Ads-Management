@@ -156,16 +156,16 @@ class DailyStat extends Model
             $result['overall_conversion_rate'] = $totalClicks > 0 ? ($totalConversions / $totalClicks) * 100 : 0;
             $result['overall_roas'] = $totalCost > 0 ? ($result['total_conversion_value'] ?? 0) / $totalCost : 0;
             
-            // Round values
-            $result['avg_ctr'] = round($result['avg_ctr'], 2);
-            $result['avg_cpc'] = round($result['avg_cpc'], 2);
-            $result['avg_cpm'] = round($result['avg_cpm'], 2);
-            $result['avg_conversion_rate'] = round($result['avg_conversion_rate'], 2);
-            $result['overall_ctr'] = round($result['overall_ctr'], 2);
-            $result['overall_cpc'] = round($result['overall_cpc'], 2);
-            $result['overall_cpm'] = round($result['overall_cpm'], 2);
-            $result['overall_conversion_rate'] = round($result['overall_conversion_rate'], 2);
-            $result['overall_roas'] = round($result['overall_roas'], 2);
+            // Round values (null安全)
+            $result['avg_ctr'] = round($result['avg_ctr'] ?? 0, 2);
+            $result['avg_cpc'] = round($result['avg_cpc'] ?? 0, 2);
+            $result['avg_cpm'] = round($result['avg_cpm'] ?? 0, 2);
+            $result['avg_conversion_rate'] = round($result['avg_conversion_rate'] ?? 0, 2);
+            $result['overall_ctr'] = round($result['overall_ctr'] ?? 0, 2);
+            $result['overall_cpc'] = round($result['overall_cpc'] ?? 0, 2);
+            $result['overall_cpm'] = round($result['overall_cpm'] ?? 0, 2);
+            $result['overall_conversion_rate'] = round($result['overall_conversion_rate'] ?? 0, 2);
+            $result['overall_roas'] = round($result['overall_roas'] ?? 0, 2);
         }
         
         return $result;

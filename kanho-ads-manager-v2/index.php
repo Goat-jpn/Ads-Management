@@ -62,25 +62,44 @@ $path = parse_url($requestUri, PHP_URL_PATH);
 $path = rtrim($path, '/') ?: '/';
 
 // 静的ファイルの処理（開発環境用）
-if ($config['env'] === 'local' && preg_match('/\.(css|js|png|jpg|gif|ico)$/', $path)) {
-    $filePath = __DIR__ . '/public' . $path;
-    if (file_exists($filePath)) {
-        $mimeTypes = [
-            'css' => 'text/css',
-            'js' => 'application/javascript',
-            'png' => 'image/png',
-            'jpg' => 'image/jpeg',
-            'gif' => 'image/gif',
-            'ico' => 'image/x-icon'
-        ];
-        
-        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
-        if (isset($mimeTypes[$extension])) {
-            header('Content-Type: ' . $mimeTypes[$extension]);
+if (preg_match('/\.(css|js|png|jpg|gif|ico|svg|woff|woff2|ttf|eot)$/', $path)) {
+    $mimeTypes = [
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'ico' => 'image/x-icon',
+        'svg' => 'image/svg+xml',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'eot' => 'application/vnd.ms-fontobject'
+    ];
+    
+    // 複数の場所で静的ファイルを探す
+    $possiblePaths = [
+        __DIR__ . $path,
+        __DIR__ . '/public' . $path,
+        __DIR__ . '/assets' . $path,
+        __DIR__ . '/public/assets' . $path
+    ];
+    
+    foreach ($possiblePaths as $filePath) {
+        if (file_exists($filePath) && is_file($filePath)) {
+            $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+            if (isset($mimeTypes[$extension])) {
+                header('Content-Type: ' . $mimeTypes[$extension]);
+            }
+            
+            // キャッシュヘッダーを設定
+            header('Cache-Control: public, max-age=3600');
+            header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
+            
+            readfile($filePath);
+            exit;
         }
-        
-        readfile($filePath);
-        exit;
     }
 }
 
@@ -100,6 +119,11 @@ $routes = [
         '/billing/create' => 'BillingController@create',
         '/billing/(\d+)' => 'BillingController@show',
         '/test-db' => 'TestController@database',
+        // 広告アカウント管理
+        '/ad-accounts' => 'AdAccountController@index',
+        '/ad-accounts/create' => 'AdAccountController@create',
+        '/ad-accounts/(\d+)' => 'AdAccountController@show',
+        '/ad-accounts/(\d+)/edit' => 'AdAccountController@edit',
     ],
     'POST' => [
         '/login' => 'AuthController@login',
@@ -109,6 +133,10 @@ $routes = [
         '/clients/(\d+)/delete' => 'ClientController@destroy',
         '/billing' => 'BillingController@store',
         '/billing/update-status' => 'BillingController@updateStatus',
+        // 広告アカウント管理
+        '/ad-accounts' => 'AdAccountController@store',
+        '/ad-accounts/(\d+)' => 'AdAccountController@update',
+        '/ad-accounts/(\d+)/delete' => 'AdAccountController@destroy',
     ]
 ];
 
@@ -121,10 +149,15 @@ if (strpos($path, '/api/') === 0) {
             '/api/dashboard/summary' => 'ApiController@dashboardSummary',
             '/api/clients' => 'ApiController@clients',
             '/api/billing/summary' => 'ApiController@billingSummary',
+            // 広告アカウント管理 API
+            '/api/ad-accounts/google' => 'AdAccountController@getGoogleAccounts',
+            '/api/ad-accounts/test-connection' => 'AdAccountController@testGoogleConnection',
         ],
         'POST' => [
             '/api/clients' => 'ApiController@storeClient',
             '/api/billing/status' => 'ApiController@updateBillingStatus',
+            // 広告アカウント管理 API
+            '/api/ad-accounts' => 'AdAccountController@apiStore',
         ]
     ];
     
