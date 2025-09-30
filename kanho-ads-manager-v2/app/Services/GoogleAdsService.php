@@ -2,445 +2,387 @@
 
 namespace App\Services;
 
+use Google\Ads\GoogleAds\Lib\V16\GoogleAdsClient;
+use Google\Ads\GoogleAds\Lib\V16\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
+use Google\Ads\GoogleAds\V16\Services\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V16\Services\CustomerServiceClient;
+use Google\Ads\GoogleAds\V16\Services\CampaignServiceClient;
+use Google\Ads\GoogleAds\V16\Services\AdGroupServiceClient;
+use Google\Ads\GoogleAds\V16\Services\AdGroupAdServiceClient;
+use Google\Ads\GoogleAds\V16\Services\SearchGoogleAdsStreamRequest;
+use Google\Ads\GoogleAds\V16\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V16\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\ApiCore\ApiException;
+use Exception;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+
 /**
- * Google Ads API Service
- * 
- * Google Ads APIとの連携を処理するサービスクラス
- * アカウント情報取得、キャンペーンデータ取得などを実装
+ * Google Ads API Service Class
  */
 class GoogleAdsService
 {
-    private $config;
-    private $accessToken;
-    private $lastError;
+    private ?GoogleAdsClient $googleAdsClient = null;
+    private Logger $logger;
+    private array $config;
     
+    /**
+     * コンストラクタ
+     */
     public function __construct()
     {
-        // 環境変数を直接読み込む（.envファイル経由）
-        $this->loadEnvironmentVariables();
-        
-        $this->config = require __DIR__ . '/../../config/google_ads.php';
-        $this->accessToken = $this->getAccessToken();
-    }
-    
-    /**
-     * 環境変数を読み込む
-     */
-    private function loadEnvironmentVariables()
-    {
-        $envFile = __DIR__ . '/../../.env';
-        if (file_exists($envFile)) {
-            $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                if (strpos(trim($line), '#') === 0) continue; // コメント行をスキップ
-                
-                list($name, $value) = explode('=', $line, 2);
-                $name = trim($name);
-                $value = trim($value);
-                
-                if (!array_key_exists($name, $_ENV)) {
-                    $_ENV[$name] = $value;
-                    putenv(sprintf('%s=%s', $name, $value));
-                }
-            }
-        }
-    }
-    
-    /**
-     * リフレッシュトークンからアクセストークンを取得
-     */
-    private function getAccessToken()
-    {
-        try {
-            $tokenData = [
-                'client_id' => $this->config['client_id'],
-                'client_secret' => $this->config['client_secret'],
-                'refresh_token' => $this->config['refresh_token'],
-                'grant_type' => 'refresh_token'
-            ];
-            
-            $this->log('DEBUG', 'Attempting to get access token with client_id: ' . substr($this->config['client_id'], 0, 20) . '...');
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->config['oauth2']['tokenCredentialUri']);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($tokenData));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/x-www-form-urlencoded'
-            ]);
-            curl_setopt($ch, CURLOPT_TIMEOUT, $this->config['request_settings']['timeout']);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 開発環境用
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-            
-            if ($curlError) {
-                $this->lastError = "CURL Error in getAccessToken: " . $curlError;
-                $this->log('ERROR', $this->lastError);
-                return null;
-            }
-            
-            $this->log('DEBUG', "Token request response: HTTP {$httpCode} - " . substr($response, 0, 200) . '...');
-            
-            if ($httpCode === 200) {
-                $tokenResponse = json_decode($response, true);
-                if ($tokenResponse && isset($tokenResponse['access_token'])) {
-                    $this->log('INFO', 'Access token obtained successfully');
-                    return $tokenResponse['access_token'];
-                } else {
-                    $this->lastError = "Invalid token response format: " . $response;
-                    $this->log('ERROR', $this->lastError);
-                    return null;
-                }
-            }
-            
-            // 401 Unauthorized の場合は特別な処理
-            if ($httpCode === 401) {
-                $errorData = json_decode($response, true);
-                if (isset($errorData['error']) && $errorData['error'] === 'invalid_client') {
-                    $this->lastError = "OAuth設定エラー: クライアントIDまたはクライアントシークレットが無効です。Google Cloud Consoleで設定を確認してください。";
-                } else {
-                    $this->lastError = "認証エラー: リフレッシュトークンが無効または期限切れです。新しいトークンを取得してください。";
-                }
-            } else {
-                $this->lastError = "Failed to get access token: HTTP {$httpCode} - {$response}";
-            }
-            
-            $this->log('ERROR', $this->lastError);
-            return null;
-            
-        } catch (Exception $e) {
-            $this->lastError = "Exception in getAccessToken: " . $e->getMessage();
-            $this->log('ERROR', $this->lastError);
-            return null;
-        }
-    }
-    
-    /**
-     * アクセス可能な顧客アカウント一覧を取得
-     */
-    public function getAccessibleCustomers()
-    {
-        if (!$this->accessToken) {
-            $this->lastError = "No valid access token available";
-            return false;
-        }
-        
-        try {
-            $url = $this->config['endpoints']['base_url'] . $this->config['endpoints']['accounts'];
-            
-            $headers = [
-                'Authorization: Bearer ' . $this->accessToken,
-                'developer-token: ' . $this->config['developer_token'],
-                'Content-Type: application/json'
-            ];
-            
-            // Manager Account IDが設定されている場合
-            if (!empty($this->config['login_customer_id'])) {
-                $headers[] = 'login-customer-id: ' . $this->config['login_customer_id'];
-            }
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, $this->config['request_settings']['timeout']);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 開発環境用
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-            
-            if ($curlError) {
-                $this->lastError = "CURL Error in getAccessibleCustomers: " . $curlError;
-                $this->log('ERROR', $this->lastError);
-                return false;
-            }
-            
-            if ($httpCode !== 200) {
-                $this->lastError = "API Error in getAccessibleCustomers: HTTP {$httpCode} - {$response}";
-                $this->log('ERROR', $this->lastError);
-                return false;
-            }
-            
-            $data = json_decode($response, true);
-            
-            if (!isset($data['resourceNames'])) {
-                $this->lastError = "Invalid response format in getAccessibleCustomers: " . $response;
-                $this->log('ERROR', $this->lastError);
-                return false;
-            }
-            
-            // 顧客IDを抽出
-            $customerIds = [];
-            foreach ($data['resourceNames'] as $resourceName) {
-                // "customers/1234567890" から "1234567890" を抽出
-                if (preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
-                    $customerIds[] = $matches[1];
-                }
-            }
-            
-            $this->log('INFO', 'Retrieved ' . count($customerIds) . ' accessible customers');
-            return $customerIds;
-            
-        } catch (Exception $e) {
-            $this->lastError = "Exception in getAccessibleCustomers: " . $e->getMessage();
-            $this->log('ERROR', $this->lastError);
-            return false;
-        }
-    }
-    
-    /**
-     * 特定の顧客の詳細情報を取得
-     */
-    public function getCustomerInfo($customerId)
-    {
-        if (!$this->accessToken) {
-            $this->lastError = "No valid access token available";
-            return false;
-        }
-        
-        try {
-            $url = $this->config['endpoints']['base_url'] . "/v16/customers/{$customerId}/googleAds:search";
-            
-            // GAQL (Google Ads Query Language) でアカウント情報を取得
-            $query = "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.status FROM customer WHERE customer.id = {$customerId}";
-            
-            $requestData = [
-                'query' => $query
-            ];
-            
-            $headers = [
-                'Authorization: Bearer ' . $this->accessToken,
-                'developer-token: ' . $this->config['developer_token'],
-                'Content-Type: application/json'
-            ];
-            
-            if (!empty($this->config['login_customer_id'])) {
-                $headers[] = 'login-customer-id: ' . $this->config['login_customer_id'];
-            }
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, $this->config['request_settings']['timeout']);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 開発環境用
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-            
-            if ($curlError) {
-                $this->lastError = "CURL Error in getCustomerInfo: " . $curlError;
-                return false;
-            }
-            
-            if ($httpCode !== 200) {
-                $this->lastError = "API Error in getCustomerInfo: HTTP {$httpCode} - {$response}";
-                return false;
-            }
-            
-            $data = json_decode($response, true);
-            
-            if (!isset($data['results']) || empty($data['results'])) {
-                $this->lastError = "No customer data found for ID: {$customerId}";
-                return false;
-            }
-            
-            $customerData = $data['results'][0]['customer'];
-            
-            return [
-                'id' => $customerData['id'] ?? $customerId,
-                'name' => $customerData['descriptiveName'] ?? "Account {$customerId}",
-                'currency' => $customerData['currencyCode'] ?? 'JPY',
-                'timezone' => $customerData['timeZone'] ?? 'Asia/Tokyo',
-                'status' => $customerData['status'] ?? 'UNKNOWN'
-            ];
-            
-        } catch (Exception $e) {
-            $this->lastError = "Exception in getCustomerInfo: " . $e->getMessage();
-            return false;
-        }
-    }
-    
-    /**
-     * アクセス可能なすべての顧客の詳細情報を取得
-     */
-    public function getAllCustomersInfo()
-    {
-        // デモモードチェック
-        $demoMode = $_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false';
-        
-        if ($demoMode === 'true') {
-            $this->log('INFO', 'Returning demo customers data');
-            return $this->getDemoCustomersInfo();
-        }
-        
-        $customerIds = $this->getAccessibleCustomers();
-        
-        if (!$customerIds) {
-            return false;
-        }
-        
-        $customersInfo = [];
-        
-        foreach ($customerIds as $customerId) {
-            // API Rate Limitを避けるための遅延
-            if (count($customersInfo) > 0) {
-                usleep($this->config['request_settings']['rate_limit_delay'] * 1000);
-            }
-            
-            $customerInfo = $this->getCustomerInfo($customerId);
-            
-            if ($customerInfo) {
-                $customersInfo[] = $customerInfo;
-            }
-        }
-        
-        $this->log('INFO', 'Retrieved info for ' . count($customersInfo) . ' customers');
-        return $customersInfo;
-    }
-    
-    /**
-     * 接続テスト
-     */
-    public function testConnection()
-    {
-        try {
-            // デモモード: 認証に問題がある場合はダミーデータで動作確認を可能にする
-            $demoMode = $_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false';
-            
-            if ($demoMode === 'true') {
-                $this->log('INFO', 'Running in demo mode');
-                return [
-                    'success' => true,
-                    'message' => 'Google Ads API接続成功 (デモモード)',
-                    'accounts_found' => 3,
-                    'sample_accounts' => ['123456789', '987654321', '555666777'],
-                    'demo_mode' => true
-                ];
-            }
-            
-            if (!$this->accessToken) {
-                // 詳細なエラー情報を含める
-                $tokenError = $this->getLastError();
-                
-                // 認証問題の場合は詳しい説明を追加
-                if (strpos($tokenError, 'invalid_client') !== false) {
-                    $suggestion = "\n\n解決方法:\n1. Google Cloud Consoleでクライアント設定を確認\n2. クライアントIDとシークレットが正しいか確認\n3. リダイレクトURIの設定を確認";
-                } elseif (strpos($tokenError, '401') !== false) {
-                    $suggestion = "\n\n解決方法:\n1. リフレッシュトークンの再生成\n2. OAuth同意画面の再設定\n3. APIスコープの確認";
-                } else {
-                    $suggestion = "\n\n解決方法:\n1. ネットワーク接続を確認\n2. API設定を見直し\n3. ログファイルで詳細を確認";
-                }
-                
-                return [
-                    'success' => false,
-                    'message' => 'アクセストークンの取得に失敗しました: ' . $tokenError . $suggestion,
-                    'accounts_found' => 0,
-                    'error_type' => 'authentication'
-                ];
-            }
-            
-            $customers = $this->getAccessibleCustomers();
-            
-            if ($customers === false) {
-                return [
-                    'success' => false,
-                    'message' => $this->getLastError(),
-                    'accounts_found' => 0,
-                    'error_type' => 'api_call'
-                ];
-            }
-            
-            return [
-                'success' => true,
-                'message' => 'Google Ads API接続成功',
-                'accounts_found' => count($customers),
-                'sample_accounts' => array_slice($customers, 0, 3) // 最初の3アカウントのIDを表示
-            ];
-            
-        } catch (Exception $e) {
-            $this->log('ERROR', 'Connection test failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'エラーが発生しました: ' . $e->getMessage(),
-                'accounts_found' => 0,
-                'error_type' => 'exception'
-            ];
-        }
-    }
-    
-    /**
-     * ダミーデータを返す (デモモード用)
-     */
-    public function getDemoCustomersInfo()
-    {
-        return [
-            [
-                'id' => '123456789',
-                'name' => 'デモアカウント1 - 検索広告',
-                'currency' => 'JPY',
-                'timezone' => 'Asia/Tokyo',
-                'status' => 'ENABLED'
-            ],
-            [
-                'id' => '987654321',
-                'name' => 'デモアカウント2 - ディスプレイ広告',
-                'currency' => 'JPY',
-                'timezone' => 'Asia/Tokyo', 
-                'status' => 'ENABLED'
-            ],
-            [
-                'id' => '555666777',
-                'name' => 'デモアカウント3 - 動画広告',
-                'currency' => 'USD',
-                'timezone' => 'America/New_York',
-                'status' => 'PAUSED'
-            ]
+        $this->config = [
+            'GOOGLE_DEVELOPER_TOKEN' => $_ENV['GOOGLE_DEVELOPER_TOKEN'] ?? '',
+            'GOOGLE_CLIENT_ID' => $_ENV['GOOGLE_CLIENT_ID'] ?? '',
+            'GOOGLE_CLIENT_SECRET' => $_ENV['GOOGLE_CLIENT_SECRET'] ?? '',
+            'GOOGLE_REFRESH_TOKEN' => $_ENV['GOOGLE_REFRESH_TOKEN'] ?? '',
+            'GOOGLE_LOGIN_CUSTOMER_ID' => $_ENV['GOOGLE_LOGIN_CUSTOMER_ID'] ?? '',
         ];
-    }
-    
-    /**
-     * 最後のエラーメッセージを取得
-     */
-    public function getLastError()
-    {
-        return $this->lastError ?? 'Unknown error';
-    }
-    
-    /**
-     * ログ出力
-     */
-    private function log($level, $message)
-    {
-        if (!$this->config['logging']['enabled']) {
-            return;
-        }
         
+        // ログ設定
+        $this->logger = new Logger('google_ads');
+        $this->logger->pushHandler(new StreamHandler(__DIR__ . '/../../logs/google_ads.log', Logger::DEBUG));
+        
+        $this->initializeClient();
+    }
+    
+    /**
+     * Google Ads APIクライアントを初期化
+     */
+    private function initializeClient(): void
+    {
         try {
-            $timestamp = date('Y-m-d H:i:s');
-            $logMessage = "[{$timestamp}] [{$level}] {$message}" . PHP_EOL;
+            // OAuth2トークン設定
+            $oAuth2Credential = (new OAuth2TokenBuilder())
+                ->withClientId($this->config['GOOGLE_CLIENT_ID'])
+                ->withClientSecret($this->config['GOOGLE_CLIENT_SECRET'])
+                ->withRefreshToken($this->config['GOOGLE_REFRESH_TOKEN'])
+                ->build();
             
-            $logFile = $this->config['logging']['file_path'];
-            $logDir = dirname($logFile);
+            // Google Ads クライアント設定
+            $this->googleAdsClient = (new GoogleAdsClientBuilder())
+                ->withOAuth2Credential($oAuth2Credential)
+                ->withDeveloperToken($this->config['GOOGLE_DEVELOPER_TOKEN'])
+                ->withLoginCustomerId($this->config['GOOGLE_LOGIN_CUSTOMER_ID'])
+                ->build();
             
-            if (!is_dir($logDir)) {
-                mkdir($logDir, 0755, true);
+            $this->logger->info('Google Ads API client initialized successfully');
+            
+        } catch (Exception $e) {
+            $this->logger->error('Failed to initialize Google Ads API client: ' . $e->getMessage());
+            throw new Exception('Google Ads API初期化に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * アクセス可能なアカウントリストを取得
+     * 
+     * @return array
+     */
+    public function getAccessibleAccounts(): array
+    {
+        try {
+            if (!$this->googleAdsClient) {
+                throw new Exception('Google Ads client not initialized');
             }
             
-            file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+            $customerServiceClient = $this->googleAdsClient->getCustomerServiceClient();
+            
+            // アクセス可能な顧客アカウントを取得
+            $accessibleCustomers = $customerServiceClient->listAccessibleCustomers();
+            
+            $accounts = [];
+            foreach ($accessibleCustomers->getResourceNames() as $resourceName) {
+                // 顧客IDを抽出 (customers/123456789 → 123456789)
+                $customerId = str_replace('customers/', '', $resourceName);
+                
+                // 詳細情報を取得
+                $accountInfo = $this->getAccountInfo($customerId);
+                if ($accountInfo) {
+                    $accounts[] = $accountInfo;
+                }
+            }
+            
+            $this->logger->info('Retrieved ' . count($accounts) . ' accessible accounts');
+            return $accounts;
+            
+        } catch (ApiException $e) {
+            $this->logger->error('API Exception in getAccessibleAccounts: ' . $e->getMessage());
+            throw new Exception('アカウント取得に失敗しました: ' . $e->getMessage());
         } catch (Exception $e) {
-            // ログ出力でエラーが発生した場合は無視（無限ループを防ぐ）
-            error_log("Failed to write to log file: " . $e->getMessage());
+            $this->logger->error('Exception in getAccessibleAccounts: ' . $e->getMessage());
+            throw $e;
         }
+    }
+    
+    /**
+     * 特定のアカウント情報を取得
+     * 
+     * @param string $customerId
+     * @return array|null
+     */
+    public function getAccountInfo(string $customerId): ?array
+    {
+        try {
+            if (!$this->googleAdsClient) {
+                throw new Exception('Google Ads client not initialized');
+            }
+            
+            $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
+            
+            $query = "SELECT customer.id, customer.descriptive_name, customer.currency_code, 
+                             customer.time_zone, customer.manager, customer.test_account 
+                      FROM customer 
+                      WHERE customer.id = $customerId";
+            
+            $stream = $googleAdsServiceClient->searchStream(
+                SearchGoogleAdsStreamRequest::build($customerId, $query)
+            );
+            
+            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+                $customer = $googleAdsRow->getCustomer();
+                
+                return [
+                    'customer_id' => (string)$customer->getId(),
+                    'name' => $customer->getDescriptiveName(),
+                    'currency' => $customer->getCurrencyCode(),
+                    'timezone' => $customer->getTimeZone(),
+                    'is_manager' => $customer->getManager(),
+                    'is_test_account' => $customer->getTestAccount()
+                ];
+            }
+            
+            return null;
+            
+        } catch (ApiException $e) {
+            $this->logger->warning("Failed to get account info for customer $customerId: " . $e->getMessage());
+            return null;
+        } catch (Exception $e) {
+            $this->logger->error("Exception in getAccountInfo for customer $customerId: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * アカウントのキャンペーンデータを取得
+     * 
+     * @param string $customerId
+     * @return array
+     */
+    public function getCampaigns(string $customerId): array
+    {
+        try {
+            if (!$this->googleAdsClient) {
+                throw new Exception('Google Ads client not initialized');
+            }
+            
+            $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
+            
+            $query = "SELECT campaign.id, campaign.name, campaign.status, 
+                             campaign.advertising_channel_type, campaign.start_date, 
+                             campaign.end_date, metrics.impressions, metrics.clicks, 
+                             metrics.ctr, metrics.cost_micros, metrics.average_cpc 
+                      FROM campaign 
+                      WHERE segments.date DURING LAST_30_DAYS 
+                      ORDER BY campaign.name";
+            
+            $stream = $googleAdsServiceClient->searchStream(
+                SearchGoogleAdsStreamRequest::build($customerId, $query)
+            );
+            
+            $campaigns = [];
+            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+                $campaign = $googleAdsRow->getCampaign();
+                $metrics = $googleAdsRow->getMetrics();
+                
+                $campaigns[] = [
+                    'campaign_id' => (string)$campaign->getId(),
+                    'name' => $campaign->getName(),
+                    'status' => CampaignStatus::name($campaign->getStatus()),
+                    'channel_type' => $campaign->getAdvertisingChannelType(),
+                    'start_date' => $campaign->getStartDate(),
+                    'end_date' => $campaign->getEndDate(),
+                    'impressions' => $metrics->getImpressions(),
+                    'clicks' => $metrics->getClicks(),
+                    'ctr' => $metrics->getCtr(),
+                    'cost_micros' => $metrics->getCostMicros(),
+                    'average_cpc' => $metrics->getAverageCpc()
+                ];
+            }
+            
+            $this->logger->info("Retrieved " . count($campaigns) . " campaigns for customer $customerId");
+            return $campaigns;
+            
+        } catch (ApiException $e) {
+            $this->logger->error("API Exception in getCampaigns for customer $customerId: " . $e->getMessage());
+            throw new Exception('キャンペーンデータの取得に失敗しました: ' . $e->getMessage());
+        } catch (Exception $e) {
+            $this->logger->error("Exception in getCampaigns for customer $customerId: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * キャンペーンの広告グループを取得
+     * 
+     * @param string $customerId
+     * @param string $campaignId
+     * @return array
+     */
+    public function getAdGroups(string $customerId, string $campaignId): array
+    {
+        try {
+            if (!$this->googleAdsClient) {
+                throw new Exception('Google Ads client not initialized');
+            }
+            
+            $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
+            
+            $query = "SELECT ad_group.id, ad_group.name, ad_group.status, 
+                             ad_group.cpc_bid_micros, metrics.impressions, metrics.clicks, 
+                             metrics.ctr, metrics.cost_micros, metrics.average_cpc 
+                      FROM ad_group 
+                      WHERE campaign.id = $campaignId 
+                      AND segments.date DURING LAST_30_DAYS 
+                      ORDER BY ad_group.name";
+            
+            $stream = $googleAdsServiceClient->searchStream(
+                SearchGoogleAdsStreamRequest::build($customerId, $query)
+            );
+            
+            $adGroups = [];
+            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+                $adGroup = $googleAdsRow->getAdGroup();
+                $metrics = $googleAdsRow->getMetrics();
+                
+                $adGroups[] = [
+                    'ad_group_id' => (string)$adGroup->getId(),
+                    'name' => $adGroup->getName(),
+                    'status' => AdGroupStatus::name($adGroup->getStatus()),
+                    'cpc_bid_micros' => $adGroup->getCpcBidMicros(),
+                    'impressions' => $metrics->getImpressions(),
+                    'clicks' => $metrics->getClicks(),
+                    'ctr' => $metrics->getCtr(),
+                    'cost_micros' => $metrics->getCostMicros(),
+                    'average_cpc' => $metrics->getAverageCpc()
+                ];
+            }
+            
+            $this->logger->info("Retrieved " . count($adGroups) . " ad groups for campaign $campaignId");
+            return $adGroups;
+            
+        } catch (ApiException $e) {
+            $this->logger->error("API Exception in getAdGroups for campaign $campaignId: " . $e->getMessage());
+            throw new Exception('広告グループデータの取得に失敗しました: ' . $e->getMessage());
+        } catch (Exception $e) {
+            $this->logger->error("Exception in getAdGroups for campaign $campaignId: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * アカウントのパフォーマンスサマリーを取得
+     * 
+     * @param string $customerId
+     * @param string $dateRange (例: "LAST_30_DAYS", "THIS_MONTH", "LAST_7_DAYS")
+     * @return array
+     */
+    public function getPerformanceSummary(string $customerId, string $dateRange = 'LAST_30_DAYS'): array
+    {
+        try {
+            if (!$this->googleAdsClient) {
+                throw new Exception('Google Ads client not initialized');
+            }
+            
+            $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
+            
+            $query = "SELECT metrics.impressions, metrics.clicks, metrics.ctr, 
+                             metrics.cost_micros, metrics.average_cpc, metrics.conversions, 
+                             metrics.conversion_rate, metrics.cost_per_conversion 
+                      FROM customer 
+                      WHERE segments.date DURING $dateRange";
+            
+            $stream = $googleAdsServiceClient->searchStream(
+                SearchGoogleAdsStreamRequest::build($customerId, $query)
+            );
+            
+            $totalMetrics = [
+                'impressions' => 0,
+                'clicks' => 0,
+                'cost_micros' => 0,
+                'conversions' => 0
+            ];
+            
+            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+                $metrics = $googleAdsRow->getMetrics();
+                
+                $totalMetrics['impressions'] += $metrics->getImpressions();
+                $totalMetrics['clicks'] += $metrics->getClicks();
+                $totalMetrics['cost_micros'] += $metrics->getCostMicros();
+                $totalMetrics['conversions'] += $metrics->getConversions();
+            }
+            
+            // CTRと平均CPCを計算
+            $ctr = $totalMetrics['clicks'] > 0 ? 
+                   ($totalMetrics['clicks'] / $totalMetrics['impressions']) * 100 : 0;
+            $averageCpc = $totalMetrics['clicks'] > 0 ? 
+                         $totalMetrics['cost_micros'] / $totalMetrics['clicks'] : 0;
+            $conversionRate = $totalMetrics['clicks'] > 0 ? 
+                             ($totalMetrics['conversions'] / $totalMetrics['clicks']) * 100 : 0;
+            $costPerConversion = $totalMetrics['conversions'] > 0 ? 
+                                $totalMetrics['cost_micros'] / $totalMetrics['conversions'] : 0;
+            
+            return [
+                'impressions' => $totalMetrics['impressions'],
+                'clicks' => $totalMetrics['clicks'],
+                'ctr' => $ctr,
+                'cost_micros' => $totalMetrics['cost_micros'],
+                'cost_yen' => $totalMetrics['cost_micros'] / 1000000, // マイクロから円に変換
+                'average_cpc' => $averageCpc,
+                'conversions' => $totalMetrics['conversions'],
+                'conversion_rate' => $conversionRate,
+                'cost_per_conversion' => $costPerConversion,
+                'date_range' => $dateRange
+            ];
+            
+        } catch (ApiException $e) {
+            $this->logger->error("API Exception in getPerformanceSummary for customer $customerId: " . $e->getMessage());
+            throw new Exception('パフォーマンスサマリーの取得に失敗しました: ' . $e->getMessage());
+        } catch (Exception $e) {
+            $this->logger->error("Exception in getPerformanceSummary for customer $customerId: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * APIクライアントの動作確認
+     * 
+     * @return bool
+     */
+    public function testConnection(): bool
+    {
+        try {
+            $accounts = $this->getAccessibleAccounts();
+            return count($accounts) > 0;
+        } catch (Exception $e) {
+            $this->logger->error('Connection test failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * ログの取得
+     * 
+     * @return string
+     */
+    public function getLastLogEntry(): string
+    {
+        $logFile = __DIR__ . '/../../logs/google_ads.log';
+        if (file_exists($logFile)) {
+            $lines = file($logFile);
+            return end($lines) ?: 'No log entries found';
+        }
+        return 'Log file not found';
     }
 }

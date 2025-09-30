@@ -359,47 +359,123 @@ class AdAccountController
      */
     private function syncAccount($account)
     {
-        // TODO: 実際のAPI連携実装
-        // 現在はダミーの同期処理
+        $startTime = microtime(true);
+        $campaignsSynced = 0;
+        $adGroupsSynced = 0;
         
         try {
+            // 同期開始をログに記録
+            $this->adAccountModel->updateSyncStatus($account['id'], 'running', null);
+            $this->logSyncHistory($account['id'], 'full', 'running', '同期を開始しました');
+            
             switch ($account['platform']) {
                 case AdAccount::PLATFORM_GOOGLE:
-                    $this->syncGoogleAdsAccount($account);
+                    $result = $this->syncGoogleAdsAccount($account);
+                    $campaignsSynced = $result['campaigns'] ?? 0;
+                    $adGroupsSynced = $result['ad_groups'] ?? 0;
                     break;
                     
                 case AdAccount::PLATFORM_YAHOO:
-                    $this->syncYahooAdsAccount($account);
+                    $result = $this->syncYahooAdsAccount($account);
+                    $campaignsSynced = $result['campaigns'] ?? 0;
                     break;
                     
                 default:
                     throw new \Exception('サポートされていないプラットフォームです。');
             }
             
-            $this->adAccountModel->updateSyncStatus($account['id'], 'success');
+            $executionTime = (microtime(true) - $startTime) * 1000; // ミリ秒
+            
+            // 同期成功
+            $this->adAccountModel->updateSyncStatus($account['id'], 'success', null);
+            $this->logSyncHistory(
+                $account['id'], 
+                'full', 
+                'success', 
+                "同期が完了しました。キャンペーン: {$campaignsSynced}件、広告グループ: {$adGroupsSynced}件",
+                $campaignsSynced,
+                $adGroupsSynced,
+                $executionTime
+            );
             
         } catch (\Exception $e) {
+            $executionTime = (microtime(true) - $startTime) * 1000; // ミリ秒
+            
+            // エラーログを記録
             $this->adAccountModel->updateSyncStatus($account['id'], 'error', $e->getMessage());
+            $this->logSyncHistory(
+                $account['id'], 
+                'full', 
+                'error', 
+                $e->getMessage(),
+                $campaignsSynced,
+                $adGroupsSynced,
+                $executionTime
+            );
+            
             throw $e;
         }
     }
     
     /**
-     * Google Ads API同期（ダミー実装）
+     * Google Ads API同期（実装済み）
      */
     private function syncGoogleAdsAccount($account)
     {
-        // TODO: Google Ads API実装
-        // 現在はダミー処理
-        sleep(1); // 同期処理をシミュレート
-        
-        // 実装例:
-        // 1. アクセストークンを取得
-        // 2. Google Ads APIでアカウント情報を取得
-        // 3. キャンペーン、広告グループ、キーワードデータを取得
-        // 4. データベースに保存
-        
-        return true;
+        try {
+            // Google Ads APIサービスを初期化
+            $googleAdsService = new GoogleAdsService();
+            
+            // 接続テスト
+            if (!$googleAdsService->testConnection()) {
+                throw new \Exception('Google Ads APIへの接続に失敗しました。認証情報を確認してください。');
+            }
+            
+            $customerId = $account['account_id'];
+            $campaignsSynced = 0;
+            $adGroupsSynced = 0;
+            
+            // 1. アカウント情報の更新
+            $accountInfo = $googleAdsService->getAccountInfo($customerId);
+            if ($accountInfo) {
+                $this->updateAccountFromApi($account['id'], $accountInfo);
+            } else {
+                throw new \Exception("アカウントID {$customerId} の情報を取得できませんでした。");
+            }
+            
+            // 2. キャンペーンデータの同期
+            $campaigns = $googleAdsService->getCampaigns($customerId);
+            $campaignsSynced = $this->saveCampaignsData($account['id'], $campaigns);
+            
+            // 3. 各キャンペーンの広告グループを同期
+            foreach ($campaigns as $campaign) {
+                try {
+                    $adGroups = $googleAdsService->getAdGroups($customerId, $campaign['campaign_id']);
+                    $adGroupsSynced += $this->saveAdGroupsData($campaign['campaign_id'], $adGroups);
+                } catch (\Exception $e) {
+                    // 個別キャンペーンのエラーは警告として記録し、処理を続行
+                    error_log("Failed to sync ad groups for campaign {$campaign['campaign_id']}: " . $e->getMessage());
+                }
+            }
+            
+            // 4. パフォーマンスサマリーの取得
+            $performanceSummary = $googleAdsService->getPerformanceSummary($customerId, 'LAST_30_DAYS');
+            $this->savePerformanceData($account['id'], $performanceSummary);
+            
+            // 5. 同期時刻の更新
+            $this->adAccountModel->update($account['id'], [
+                'last_sync_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            return [
+                'campaigns' => $campaignsSynced,
+                'ad_groups' => $adGroupsSynced
+            ];
+            
+        } catch (\Exception $e) {
+            error_log('Google Ads sync error: ' . $e->getMessage());
+            throw new \Exception('Google Ads同期エラー: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -412,6 +488,215 @@ class AdAccountController
         sleep(1); // 同期処理をシミュレート
         
         return true;
+    }
+    
+    /**
+     * APIから取得したアカウント情報でアカウントを更新
+     */
+    private function updateAccountFromApi($accountId, $accountInfo)
+    {
+        try {
+            $updateData = [
+                'currency' => $accountInfo['currency'] ?? 'JPY',
+                'timezone' => $accountInfo['timezone'] ?? 'Asia/Tokyo',
+            ];
+            
+            // アカウント名が未設定の場合のみ更新
+            $currentAccount = $this->adAccountModel->find($accountId);
+            if (empty($currentAccount['account_name']) && !empty($accountInfo['name'])) {
+                $updateData['account_name'] = $accountInfo['name'];
+            }
+            
+            return $this->adAccountModel->update($accountId, $updateData);
+            
+        } catch (\Exception $e) {
+            error_log('Failed to update account from API: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * キャンペーンデータをデータベースに保存
+     */
+    private function saveCampaignsData($accountId, $campaigns)
+    {
+        try {
+            $db = getDatabaseConnection();
+            
+            // 既存のキャンペーンデータを削除（最新データで上書き）
+            $stmt = $db->prepare("DELETE FROM campaigns WHERE ad_account_id = ?");
+            $stmt->execute([$accountId]);
+            
+            // 新しいキャンペーンデータを挿入
+            $insertStmt = $db->prepare("
+                INSERT INTO campaigns (
+                    ad_account_id, campaign_id, name, status, channel_type,
+                    start_date, end_date, impressions, clicks, ctr,
+                    cost_micros, average_cpc, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            foreach ($campaigns as $campaign) {
+                $insertStmt->execute([
+                    $accountId,
+                    $campaign['campaign_id'],
+                    $campaign['name'],
+                    $campaign['status'],
+                    $campaign['channel_type'],
+                    $campaign['start_date'],
+                    $campaign['end_date'],
+                    $campaign['impressions'],
+                    $campaign['clicks'],
+                    $campaign['ctr'],
+                    $campaign['cost_micros'],
+                    $campaign['average_cpc']
+                ]);
+            }
+            
+            return count($campaigns);
+            
+        } catch (\Exception $e) {
+            error_log('Failed to save campaigns data: ' . $e->getMessage());
+            throw new \Exception('キャンペーンデータの保存に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * パフォーマンスデータをデータベースに保存
+     */
+    private function savePerformanceData($accountId, $performanceData)
+    {
+        try {
+            $db = getDatabaseConnection();
+            
+            // パフォーマンスサマリーを保存
+            $stmt = $db->prepare("
+                INSERT INTO performance_summaries (
+                    ad_account_id, date_range, impressions, clicks, ctr,
+                    cost_micros, cost_yen, average_cpc, conversions,
+                    conversion_rate, cost_per_conversion, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                    impressions = VALUES(impressions),
+                    clicks = VALUES(clicks),
+                    ctr = VALUES(ctr),
+                    cost_micros = VALUES(cost_micros),
+                    cost_yen = VALUES(cost_yen),
+                    average_cpc = VALUES(average_cpc),
+                    conversions = VALUES(conversions),
+                    conversion_rate = VALUES(conversion_rate),
+                    cost_per_conversion = VALUES(cost_per_conversion),
+                    updated_at = NOW()
+            ");
+            
+            $stmt->execute([
+                $accountId,
+                $performanceData['date_range'],
+                $performanceData['impressions'],
+                $performanceData['clicks'],
+                $performanceData['ctr'],
+                $performanceData['cost_micros'],
+                $performanceData['cost_yen'],
+                $performanceData['average_cpc'],
+                $performanceData['conversions'],
+                $performanceData['conversion_rate'],
+                $performanceData['cost_per_conversion']
+            ]);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            error_log('Failed to save performance data: ' . $e->getMessage());
+            throw new \Exception('パフォーマンスデータの保存に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 広告グループデータをデータベースに保存
+     */
+    private function saveAdGroupsData($campaignId, $adGroups)
+    {
+        try {
+            $db = getDatabaseConnection();
+            
+            // campaignIdをデータベースの内部IDに変換
+            $stmt = $db->prepare("SELECT id FROM campaigns WHERE campaign_id = ? LIMIT 1");
+            $stmt->execute([$campaignId]);
+            $campaign = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            if (!$campaign) {
+                throw new \Exception("Campaign ID {$campaignId} not found in database");
+            }
+            
+            $dbCampaignId = $campaign['id'];
+            
+            // 既存の広告グループデータを削除
+            $stmt = $db->prepare("DELETE FROM ad_groups WHERE campaign_id = ?");
+            $stmt->execute([$dbCampaignId]);
+            
+            // 新しい広告グループデータを挿入
+            $insertStmt = $db->prepare("
+                INSERT INTO ad_groups (
+                    campaign_id, ad_group_id, name, status, cpc_bid_micros,
+                    impressions, clicks, ctr, cost_micros, average_cpc,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            foreach ($adGroups as $adGroup) {
+                $insertStmt->execute([
+                    $dbCampaignId,
+                    $adGroup['ad_group_id'],
+                    $adGroup['name'],
+                    $adGroup['status'],
+                    $adGroup['cpc_bid_micros'],
+                    $adGroup['impressions'],
+                    $adGroup['clicks'],
+                    $adGroup['ctr'],
+                    $adGroup['cost_micros'],
+                    $adGroup['average_cpc']
+                ]);
+            }
+            
+            return count($adGroups);
+            
+        } catch (\Exception $e) {
+            error_log('Failed to save ad groups data: ' . $e->getMessage());
+            throw new \Exception('広告グループデータの保存に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 同期履歴をログに記録
+     */
+    private function logSyncHistory($accountId, $syncType, $status, $message, $campaignsSynced = 0, $adGroupsSynced = 0, $executionTime = 0)
+    {
+        try {
+            $db = getDatabaseConnection();
+            
+            $stmt = $db->prepare("
+                INSERT INTO sync_history (
+                    ad_account_id, sync_type, status, message,
+                    campaigns_synced, ad_groups_synced, execution_time_ms, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            
+            $stmt->execute([
+                $accountId,
+                $syncType,
+                $status,
+                $message,
+                $campaignsSynced,
+                $adGroupsSynced,
+                $executionTime
+            ]);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            error_log('Failed to log sync history: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
