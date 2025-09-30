@@ -40,7 +40,7 @@ class BillingRecord extends Model
     
     public function getByStatus($status)
     {
-        $sql = "SELECT br.*, c.name as client_name, c.company, c.email
+        $sql = "SELECT br.*, c.company_name as client_name, c.company_name as company, c.email
                 FROM {$this->table} br
                 JOIN clients c ON br.client_id = c.id
                 WHERE br.status = ?
@@ -54,7 +54,7 @@ class BillingRecord extends Model
     
     public function getOverdueBillings()
     {
-        $sql = "SELECT br.*, c.name as client_name, c.company, c.email
+        $sql = "SELECT br.*, c.company_name as client_name, c.company_name as company, c.email
                 FROM {$this->table} br
                 JOIN clients c ON br.client_id = c.id
                 WHERE br.status IN ('billed', 'pending') 
