@@ -11,6 +11,7 @@ use Google\Ads\GoogleAds\V16\Services\CampaignServiceClient;
 use Google\Ads\GoogleAds\V16\Services\AdGroupServiceClient;
 use Google\Ads\GoogleAds\V16\Services\AdGroupAdServiceClient;
 use Google\Ads\GoogleAds\V16\Services\SearchGoogleAdsStreamRequest;
+use Google\Ads\GoogleAds\V16\Services\ListAccessibleCustomersRequest;
 use Google\Ads\GoogleAds\V16\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V16\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\ApiCore\ApiException;
@@ -90,7 +91,8 @@ class GoogleAdsService
             $customerServiceClient = $this->googleAdsClient->getCustomerServiceClient();
             
             // アクセス可能な顧客アカウントを取得
-            $accessibleCustomers = $customerServiceClient->listAccessibleCustomers();
+            $request = new ListAccessibleCustomersRequest();
+            $accessibleCustomers = $customerServiceClient->listAccessibleCustomers($request);
             
             $accounts = [];
             foreach ($accessibleCustomers->getResourceNames() as $resourceName) {
@@ -137,7 +139,10 @@ class GoogleAdsService
                       WHERE customer.id = $customerId";
             
             $stream = $googleAdsServiceClient->searchStream(
-                SearchGoogleAdsStreamRequest::build($customerId, $query)
+                new SearchGoogleAdsStreamRequest([
+                'customer_id' => $customerId,
+                'query' => $query
+            ])
             );
             
             foreach ($stream->iterateAllElements() as $googleAdsRow) {
@@ -188,7 +193,10 @@ class GoogleAdsService
                       ORDER BY campaign.name";
             
             $stream = $googleAdsServiceClient->searchStream(
-                SearchGoogleAdsStreamRequest::build($customerId, $query)
+                new SearchGoogleAdsStreamRequest([
+                'customer_id' => $customerId,
+                'query' => $query
+            ])
             );
             
             $campaigns = [];
@@ -248,7 +256,10 @@ class GoogleAdsService
                       ORDER BY ad_group.name";
             
             $stream = $googleAdsServiceClient->searchStream(
-                SearchGoogleAdsStreamRequest::build($customerId, $query)
+                new SearchGoogleAdsStreamRequest([
+                'customer_id' => $customerId,
+                'query' => $query
+            ])
             );
             
             $adGroups = [];
@@ -304,7 +315,10 @@ class GoogleAdsService
                       WHERE segments.date DURING $dateRange";
             
             $stream = $googleAdsServiceClient->searchStream(
-                SearchGoogleAdsStreamRequest::build($customerId, $query)
+                new SearchGoogleAdsStreamRequest([
+                'customer_id' => $customerId,
+                'query' => $query
+            ])
             );
             
             $totalMetrics = [
