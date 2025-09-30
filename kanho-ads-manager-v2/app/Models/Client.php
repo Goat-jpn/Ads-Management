@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Core\Model;
 use PDO;
 
-class Client
+class Client extends Model
 {
-    private $db;
     protected $table = 'clients';
     protected $fillable = [
         'user_id', 'company_name', 'contact_person', 'email', 'phone', 
@@ -14,17 +14,6 @@ class Client
     ];
     
     protected $hidden = [];
-    
-    public function __construct()
-    {
-        $this->db = \Database::getInstance();
-    }
-    
-    public function find($id)
-    {
-        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
-        return $this->db->selectOne($sql, [$id]);
-    }
     
     public function create($data)
     {
@@ -34,7 +23,7 @@ class Client
         $data['created_at'] = date('Y-m-d H:i:s');
         $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return $this->db->insert($this->table, $data);
+        return parent::create($data);
     }
     
     public function findByUser($userId)
@@ -135,6 +124,14 @@ class Client
         $stmt = $this->db->getConnection()->prepare($sql);
         
         return $stmt->execute([$status, $clientId]);
+    }
+    
+    public function getClientsWithUpcomingContracts($days = 30)
+    {
+        // This method would check for clients with contracts expiring within X days
+        // For now, return empty array since we don't have contract_end_date field
+        // This can be implemented when contract management is added
+        return [];
     }
     
     public function getRecentClients($limit = 5, $userId = null)

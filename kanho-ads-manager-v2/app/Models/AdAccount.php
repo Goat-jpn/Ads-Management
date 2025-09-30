@@ -219,4 +219,47 @@ class AdAccount
         
         return $platforms[$platform] ?? $platform;
     }
+    
+    /**
+     * ステータス名を日本語で取得
+     */
+    public static function getStatusName($status)
+    {
+        $statuses = [
+            'active' => 'アクティブ',
+            'inactive' => '非アクティブ',
+            'suspended' => '停止中'
+        ];
+        
+        return $statuses[$status] ?? $status;
+    }
+    
+    /**
+     * アカウント統計を取得
+     */
+    public function getAccountStats()
+    {
+        $sql = "SELECT 
+                    platform,
+                    status,
+                    COUNT(*) as count
+                FROM {$this->table}
+                GROUP BY platform, status
+                ORDER BY platform, status";
+        
+        return $this->db->select($sql);
+    }
+    
+    /**
+     * 同期が必要なアカウントを取得
+     */
+    public function getAccountsNeedingSync($hours = 24)
+    {
+        $sql = "SELECT * FROM {$this->table}
+                WHERE (last_sync_at IS NULL OR last_sync_at < DATE_SUB(NOW(), INTERVAL ? HOUR))
+                AND status = 'active'
+                ORDER BY last_sync_at ASC";
+        
+        return $this->db->select($sql, [$hours]);
+    }
 }
