@@ -29,7 +29,7 @@ if (file_exists($envFile)) {
 
 $clientId = $_ENV['GOOGLE_CLIENT_ID'] ?? '';
 $clientSecret = $_ENV['GOOGLE_CLIENT_SECRET'] ?? '';
-$redirectUri = $_ENV['GOOGLE_REDIRECT_URI'] ?? 'http://localhost/oauth2callback';
+$redirectUri = $_ENV['GOOGLE_REDIRECT_URI'] ?? 'urn:ietf:wg:oauth:2.0:oob'; // OOBフローに合わせる
 
 if (empty($clientId) || empty($clientSecret)) {
     echo "Error: OAuth credentials not found in .env file\n";
