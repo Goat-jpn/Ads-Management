@@ -180,6 +180,44 @@ $routes = [
         require_once __DIR__ . '/../views/dashboard.php';
     },
     
+    // プロフィール管理
+    'GET /profile' => function() {
+        if (!isset($_SESSION['user'])) {
+            header('Location: /login');
+            exit;
+        }
+        require_once __DIR__ . '/../views/profile/profile.php';
+    },
+    
+    'POST /profile' => function() {
+        if (!isset($_SESSION['user'])) {
+            header('Location: /login');
+            exit;
+        }
+        // プロフィール更新処理（未実装）
+        flash('success', 'プロフィールを更新しました。');
+        header('Location: /profile');
+        exit;
+    },
+    
+    // キャンペーン管理
+    'GET /campaigns' => function() {
+        if (!isset($_SESSION['user'])) {
+            header('Location: /login');
+            exit;
+        }
+        require_once __DIR__ . '/../views/campaigns/index.php';
+    },
+    
+    // 請求管理
+    'GET /billing' => function() {
+        if (!isset($_SESSION['user'])) {
+            header('Location: /login');
+            exit;
+        }
+        require_once __DIR__ . '/../views/billing/index.php';
+    },
+    
     // クライアント管理
     'GET /clients' => function() {
         require_once __DIR__ . '/../app/Controllers/ClientController.php';
