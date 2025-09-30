@@ -14,6 +14,17 @@ class AdAccount extends Model
         'last_sync_at', 'access_token', 'refresh_token'
     ];
     
+    // プラットフォーム定数
+    const PLATFORM_GOOGLE = 'google';
+    const PLATFORM_YAHOO = 'yahoo';
+    const PLATFORM_META = 'meta';
+    const PLATFORM_TWITTER = 'twitter';
+    
+    // ステータス定数
+    const STATUS_ACTIVE = 'active';
+    const STATUS_INACTIVE = 'inactive';
+    const STATUS_SUSPENDED = 'suspended';
+    
     /**
      * 全ての広告アカウントを取得
      */
@@ -258,6 +269,34 @@ class AdAccount extends Model
                 AND status = 'active'
                 ORDER BY last_sync_at ASC";
         
-        return $this->db->select($sql, [$hours]);
+        return $this->query($sql, [$hours]);
+    }
+    
+    /**
+     * 同期ステータスを更新
+     */
+    public function updateSyncStatus($accountId, $status, $errorMessage = null)
+    {
+        $updateData = [
+            'last_sync_at' => date('Y-m-d H:i:s'),
+            'sync_status' => $status
+        ];
+        
+        if ($errorMessage) {
+            $updateData['sync_error'] = $errorMessage;
+        }
+        
+        return $this->update($accountId, $updateData);
+    }
+    
+    /**
+     * 同期エラーをクリア
+     */
+    public function clearSyncError($accountId)
+    {
+        return $this->update($accountId, [
+            'sync_error' => null,
+            'sync_status' => 'success'
+        ]);
     }
 }
