@@ -386,7 +386,7 @@ async function loadGoogleAccounts() {
     }
     
     try {
-        const response = await fetch('/api/google-accounts');
+        const response = await fetch('/api/ad-accounts/google');
         const data = await response.json();
         
         if (!response.ok) {
@@ -475,7 +475,7 @@ async function testGoogleConnection() {
     testButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>テスト中...';
     
     try {
-        const response = await fetch('/api/google-test');
+        const response = await fetch('/api/ad-accounts/test-connection');
         const data = await response.json();
         
         if (data.success) {
