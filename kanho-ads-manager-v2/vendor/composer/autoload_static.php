@@ -78,8 +78,8 @@ class ComposerStaticInitf4417a008df483a796a834d193c2854d
         ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-message/src',
-            1 => __DIR__ . '/..' . '/psr/http-factory/src',
+            0 => __DIR__ . '/..' . '/psr/http-factory/src',
+            1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
         'Psr\\Http\\Client\\' => 
         array (
@@ -132,7 +132,10 @@ class ComposerStaticInitf4417a008df483a796a834d193c2854d
     );
 
     public static $classMap = array (
+        'App\\Controllers\\AdAccountController' => __DIR__ . '/../..' . '/app/Controllers/AdAccountController.php',
         'App\\Controllers\\AuthController' => __DIR__ . '/../..' . '/app/Controllers/AuthController.php',
+        'App\\Controllers\\ClientController' => __DIR__ . '/../..' . '/app/Controllers/ClientController.php',
+        'App\\Controllers\\DashboardController' => __DIR__ . '/../..' . '/app/Controllers/DashboardController.php',
         'App\\Controllers\\TestController' => __DIR__ . '/../..' . '/app/Controllers/TestController.php',
         'App\\Core\\Model' => __DIR__ . '/../..' . '/app/Core/Model.php',
         'App\\Models\\AdAccount' => __DIR__ . '/../..' . '/app/Models/AdAccount.php',
@@ -142,6 +145,7 @@ class ComposerStaticInitf4417a008df483a796a834d193c2854d
         'App\\Models\\Client' => __DIR__ . '/../..' . '/app/Models/Client.php',
         'App\\Models\\DailyStat' => __DIR__ . '/../..' . '/app/Models/DailyStat.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/app/Models/User.php',
+        'App\\Services\\GoogleAdsService' => __DIR__ . '/../..' . '/app/Services/GoogleAdsService.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'Datamatrix' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/barcodes/datamatrix.php',

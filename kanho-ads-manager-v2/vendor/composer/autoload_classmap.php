@@ -6,7 +6,10 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
+    'App\\Controllers\\AdAccountController' => $baseDir . '/app/Controllers/AdAccountController.php',
     'App\\Controllers\\AuthController' => $baseDir . '/app/Controllers/AuthController.php',
+    'App\\Controllers\\ClientController' => $baseDir . '/app/Controllers/ClientController.php',
+    'App\\Controllers\\DashboardController' => $baseDir . '/app/Controllers/DashboardController.php',
     'App\\Controllers\\TestController' => $baseDir . '/app/Controllers/TestController.php',
     'App\\Core\\Model' => $baseDir . '/app/Core/Model.php',
     'App\\Models\\AdAccount' => $baseDir . '/app/Models/AdAccount.php',
@@ -16,6 +19,7 @@ return array(
     'App\\Models\\Client' => $baseDir . '/app/Models/Client.php',
     'App\\Models\\DailyStat' => $baseDir . '/app/Models/DailyStat.php',
     'App\\Models\\User' => $baseDir . '/app/Models/User.php',
+    'App\\Services\\GoogleAdsService' => $baseDir . '/app/Services/GoogleAdsService.php',
     'Attribute' => $vendorDir . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
     'Datamatrix' => $vendorDir . '/tecnickcom/tcpdf/include/barcodes/datamatrix.php',

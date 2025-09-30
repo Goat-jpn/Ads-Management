@@ -2,249 +2,160 @@
 
 namespace App\Models;
 
-use App\Core\Model;
 use PDO;
 
-class AdAccount extends Model
+class AdAccount
 {
-    protected $table = 'ad_accounts';
-    protected $fillable = [
-        'client_id', 'platform', 'account_id', 'account_name', 'currency', 
-        'timezone', 'access_token', 'refresh_token', 'token_expires_at',
-        'last_sync', 'sync_enabled', 'status'
-    ];
+    private $db;
+    private $table = 'ad_accounts';
     
-    protected $hidden = ['access_token', 'refresh_token'];
+    public function __construct()
+    {
+        $this->db = \Database::getInstance();
+    }
     
-    // プラットフォーム定数
-    const PLATFORM_GOOGLE = 'google';
-    const PLATFORM_YAHOO = 'yahoo';
+    /**
+     * 全ての広告アカウントを取得
+     */
+    public function getAll($userId = null)
+    {
+        $sql = "SELECT * FROM {$this->table}";
+        $params = [];
+        
+        if ($userId) {
+            $sql .= " WHERE user_id = ?";
+            $params[] = $userId;
+        }
+        
+        $sql .= " ORDER BY created_at DESC";
+        
+        return $this->db->select($sql, $params);
+    }
     
-    // ステータス定数
-    const STATUS_ACTIVE = 'active';
-    const STATUS_INACTIVE = 'inactive'; 
-    const STATUS_SUSPENDED = 'suspended';
+    /**
+     * IDで広告アカウントを取得
+     */
+    public function getById($id)
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
+        return $this->db->selectOne($sql, [$id]);
+    }
     
+    /**
+     * 広告アカウントを作成
+     */
     public function create($data)
     {
-        // デフォルト値を設定
-        $data['status'] = $data['status'] ?? self::STATUS_INACTIVE;
-        $data['sync_enabled'] = $data['sync_enabled'] ?? 1;
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return parent::create($data);
+        return $this->db->insert($this->table, $data);
     }
     
     /**
-     * クライアント別の広告アカウント一覧を取得
+     * 広告アカウントを更新
      */
-    public function findByClient($clientId)
+    public function update($id, $data)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE client_id = ? ORDER BY created_at DESC";
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$clientId]);
+        $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
+        return $this->db->update($this->table, $data, 'id = ?', [$id]);
     }
     
     /**
-     * プラットフォーム別の広告アカウント一覧を取得
+     * 広告アカウントを削除
      */
-    public function findByPlatform($platform)
+    public function delete($id)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE platform = ? ORDER BY account_name ASC";
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$platform]);
-        
-        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
+        return $this->db->delete($this->table, 'id = ?', [$id]);
     }
     
     /**
-     * アクティブな広告アカウント一覧を取得
+     * プラットフォーム別の広告アカウント数を取得
      */
-    public function getActiveAccounts($clientId = null)
+    public function getCountByPlatform($userId = null)
     {
-        $sql = "SELECT aa.*, c.company_name 
-                FROM {$this->table} aa 
-                LEFT JOIN clients c ON aa.client_id = c.id 
-                WHERE aa.status = ?";
-        $params = [self::STATUS_ACTIVE];
+        $sql = "SELECT platform, COUNT(*) as count 
+                FROM {$this->table}";
+        $params = [];
         
-        if ($clientId) {
-            $sql .= " AND aa.client_id = ?";
-            $params[] = $clientId;
+        if ($userId) {
+            $sql .= " WHERE user_id = ?";
+            $params[] = $userId;
         }
         
-        $sql .= " ORDER BY aa.account_name ASC";
+        $sql .= " GROUP BY platform";
         
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute($params);
-        
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->db->select($sql, $params);
     }
     
     /**
-     * 同期が必要なアカウント一覧を取得
+     * アクティブなアカウント数を取得
      */
-    public function getAccountsNeedingSync($hoursOld = 24)
+    public function getActiveCount($userId = null)
     {
-        $sql = "SELECT * FROM {$this->table} 
-                WHERE sync_enabled = 1 
-                AND status = ? 
-                AND (last_sync IS NULL OR last_sync < DATE_SUB(NOW(), INTERVAL ? HOUR))
-                ORDER BY last_sync ASC";
-                
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([self::STATUS_ACTIVE, $hoursOld]);
-        
-        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
-    }
-    
-    /**
-     * アカウント統計情報を取得
-     */
-    public function getAccountStats()
-    {
-        $sql = "SELECT 
-                    platform,
-                    status,
-                    COUNT(*) as count
+        $sql = "SELECT COUNT(*) as count 
                 FROM {$this->table} 
-                GROUP BY platform, status
-                ORDER BY platform, status";
-                
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute();
+                WHERE status = 'active'";
+        $params = [];
         
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-    
-    /**
-     * アカウントの同期状態を更新
-     */
-    public function updateSyncStatus($accountId, $status = 'success', $errorMessage = null)
-    {
-        $data = [
-            'last_sync' => date('Y-m-d H:i:s'),
-        ];
-        
-        if ($status === 'error' && $errorMessage) {
-            // エラーログ記録用の追加処理（将来実装）
-            error_log("Ad Account sync error for ID {$accountId}: {$errorMessage}");
+        if ($userId) {
+            $sql .= " AND user_id = ?";
+            $params[] = $userId;
         }
         
-        return $this->update($accountId, $data);
+        $result = $this->db->selectOne($sql, $params);
+        return $result ? $result['count'] : 0;
     }
     
     /**
-     * プラットフォーム別のアカウント数を取得
+     * 顧客IDで広告アカウントを検索
      */
-    public function countByPlatform()
+    public function getByCustomerId($customerId)
     {
-        $sql = "SELECT 
-                    platform,
-                    COUNT(*) as total,
-                    COUNT(CASE WHEN status = 'active' THEN 1 END) as active
-                FROM {$this->table} 
-                GROUP BY platform";
-                
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute();
-        
-        $result = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $result[$row['platform']] = [
-                'total' => (int)$row['total'],
-                'active' => (int)$row['active']
-            ];
-        }
-        
-        return $result;
+        $sql = "SELECT * FROM {$this->table} WHERE customer_id = ?";
+        return $this->db->selectOne($sql, [$customerId]);
     }
     
     /**
-     * アカウント検索
+     * ユーザーの広告アカウントを取得（クライアント情報も含む）
      */
-    public function searchAccounts($query, $clientId = null)
+    public function getByUserWithClient($userId)
     {
-        $sql = "SELECT aa.*, c.company_name 
-                FROM {$this->table} aa 
-                LEFT JOIN clients c ON aa.client_id = c.id 
-                WHERE (aa.account_name LIKE ? OR aa.account_id LIKE ? OR c.company_name LIKE ?)";
-        $params = ["%{$query}%", "%{$query}%", "%{$query}%"];
+        $sql = "SELECT aa.*, c.company_name as client_name
+                FROM {$this->table} aa
+                LEFT JOIN clients c ON aa.client_id = c.id
+                WHERE aa.user_id = ?
+                ORDER BY aa.created_at DESC";
         
-        if ($clientId) {
-            $sql .= " AND aa.client_id = ?";
-            $params[] = $clientId;
-        }
-        
-        $sql .= " ORDER BY aa.account_name ASC";
-        
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute($params);
-        
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->db->select($sql, [$userId]);
     }
     
     /**
-     * アクセストークンの暗号化保存
+     * 検証ルール
      */
-    public function saveEncryptedTokens($accountId, $accessToken, $refreshToken = null, $expiresAt = null)
+    public static function getValidationRules()
     {
-        // 本番環境では適切な暗号化を実装
-        // 現在は開発用に平文で保存（セキュリティ注意）
-        
-        $data = [
-            'access_token' => $accessToken,
-            'refresh_token' => $refreshToken,
-            'token_expires_at' => $expiresAt
-        ];
-        
-        return $this->update($accountId, $data);
-    }
-    
-    /**
-     * 復号化されたアクセストークンを取得
-     */
-    public function getDecryptedTokens($accountId)
-    {
-        $account = $this->find($accountId);
-        
-        if (!$account) {
-            return null;
-        }
-        
-        // 本番環境では復号化処理を実装
         return [
-            'access_token' => $account['access_token'],
-            'refresh_token' => $account['refresh_token'],
-            'expires_at' => $account['token_expires_at']
+            'platform' => 'required|in:google_ads,yahoo_ads,meta_ads,twitter_ads',
+            'account_name' => 'required|max:255',
+            'customer_id' => 'required|max:255',
+            'status' => 'in:active,inactive,suspended',
         ];
     }
     
     /**
-     * プラットフォーム名の日本語変換
+     * プラットフォーム名を日本語で取得
      */
     public static function getPlatformName($platform)
     {
-        $names = [
-            self::PLATFORM_GOOGLE => 'Google Ads',
-            self::PLATFORM_YAHOO => 'Yahoo Ads'
+        $platforms = [
+            'google_ads' => 'Google Ads',
+            'yahoo_ads' => 'Yahoo! 広告',
+            'meta_ads' => 'Meta Ads',
+            'twitter_ads' => 'Twitter Ads'
         ];
         
-        return $names[$platform] ?? $platform;
-    }
-    
-    /**
-     * ステータス名の日本語変換
-     */
-    public static function getStatusName($status)
-    {
-        $names = [
-            self::STATUS_ACTIVE => 'アクティブ',
-            self::STATUS_INACTIVE => '非アクティブ',
-            self::STATUS_SUSPENDED => '停止中'
-        ];
-        
-        return $names[$status] ?? $status;
+        return $platforms[$platform] ?? $platform;
     }
 }

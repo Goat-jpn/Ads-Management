@@ -188,7 +188,7 @@ if (!function_exists('is_logged_in')) {
      * ログイン状態確認
      */
     function is_logged_in() {
-        return isset($_SESSION['user']);
+        return isset($_SESSION['user_id']) || isset($_SESSION['user']) || isset($_SESSION['is_logged_in']);
     }
 }
 
