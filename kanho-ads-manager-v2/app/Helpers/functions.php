@@ -293,6 +293,24 @@ if (!function_exists('logger')) {
     }
 }
 
+if (!function_exists('getDatabaseConnection')) {
+    /**
+     * データベース接続取得
+     */
+    function getDatabaseConnection() {
+        return Database::getInstance()->getConnection();
+    }
+}
+
+if (!function_exists('db')) {
+    /**
+     * データベースインスタンス取得
+     */
+    function db() {
+        return Database::getInstance();
+    }
+}
+
 if (!function_exists('abort')) {
     /**
      * エラーページ表示
