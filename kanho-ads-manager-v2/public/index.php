@@ -224,6 +224,31 @@ $routes = [
         $controller->sync();
     },
     
+    // Dynamic routes for ad-accounts (must be after static routes)
+    'GET /ad-accounts/{id}' => function($matches) {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->show($matches['id']);
+    },
+    
+    'GET /ad-accounts/{id}/edit' => function($matches) {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->edit($matches['id']);
+    },
+    
+    'POST /ad-accounts/{id}/update' => function($matches) {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->update($matches['id']);
+    },
+    
+    'POST /ad-accounts/{id}/delete' => function($matches) {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->destroy($matches['id']);
+    },
+    
     // Google Ads API 連携
     'GET /api/google-accounts' => function() {
         require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
@@ -237,6 +262,32 @@ $routes = [
         $controller->testGoogleConnection();
     },
     
+    // Ad Account API エンドポイント
+    'GET /api/ad-accounts/google' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->getGoogleAccounts();
+    },
+    
+    'GET /api/ad-accounts/test-connection' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->testGoogleConnection();
+    },
+    
+    // Dashboard API エンドポイント
+    'GET /api/dashboard/performance' => function() {
+        require_once __DIR__ . '/../app/Controllers/DashboardController.php';
+        $controller = new \App\Controllers\DashboardController();
+        $controller->getPerformanceData();
+    },
+    
+    'GET /api/dashboard/platforms' => function() {
+        require_once __DIR__ . '/../app/Controllers/DashboardController.php';
+        $controller = new \App\Controllers\DashboardController();
+        $controller->getPlatformData();
+    },
+    
     // 404 ハンドラー
     '404' => function() {
         http_response_code(404);
@@ -246,10 +297,13 @@ $routes = [
 
 // リクエストマッチング
 $route = $requestMethod . ' ' . $path;
+$matched = false;
 
+// 完全一致のルートを最初にチェック
 if (isset($routes[$route])) {
     try {
         $routes[$route]();
+        $matched = true;
     } catch (Exception $e) {
         error_log("Route handler error: " . $e->getMessage());
         http_response_code(500);
@@ -261,7 +315,42 @@ if (isset($routes[$route])) {
             echo "<h1>500 Internal Server Error</h1>";
         }
     }
-} else {
+}
+
+// 動的ルートをチェック（完全一致がなかった場合）
+if (!$matched) {
+    foreach ($routes as $routePattern => $handler) {
+        // {id} パラメータを含むルートパターンを正規表現に変換
+        $pattern = str_replace('{id}', '([0-9]+)', $routePattern);
+        $pattern = '#^' . $pattern . '$#';
+        
+        if (preg_match($pattern, $route, $matches)) {
+            try {
+                // マッチしたパラメータを抽出
+                $params = [];
+                if (isset($matches[1])) {
+                    $params['id'] = $matches[1];
+                }
+                $handler($params);
+                $matched = true;
+                break;
+            } catch (Exception $e) {
+                error_log("Route handler error: " . $e->getMessage());
+                http_response_code(500);
+                if ($config['debug']) {
+                    echo "<h1>500 Internal Server Error</h1>";
+                    echo "<p>" . htmlspecialchars($e->getMessage()) . "</p>";
+                    echo "<pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
+                } else {
+                    echo "<h1>500 Internal Server Error</h1>";
+                }
+            }
+        }
+    }
+}
+
+// どのルートにもマッチしなかった場合は動的ルートをチェック
+if (!$matched) {
     // パターンマッチング（動的ルート用）
     $matched = false;
     

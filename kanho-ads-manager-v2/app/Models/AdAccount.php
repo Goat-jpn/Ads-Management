@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
+use App\Core\Model;
 use PDO;
 
-class AdAccount
+class AdAccount extends Model
 {
-    private $db;
-    private $table = 'ad_accounts';
-    
-    public function __construct()
-    {
-        $this->db = \Database::getInstance();
-    }
+    protected $table = 'ad_accounts';
+    protected $fillable = [
+        'user_id', 'client_id', 'platform', 'account_name', 'customer_id', 
+        'account_id', 'currency', 'timezone', 'status', 'sync_enabled',
+        'last_sync_at', 'access_token', 'refresh_token'
+    ];
     
     /**
      * 全ての広告アカウントを取得
@@ -29,16 +29,15 @@ class AdAccount
         
         $sql .= " ORDER BY created_at DESC";
         
-        return $this->db->select($sql, $params);
+        return $this->query($sql, $params);
     }
     
     /**
-     * IDで広告アカウントを取得
+     * IDで広告アカウントを取得（エイリアス - 基底クラスのfind()を使用）
      */
     public function getById($id)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
-        return $this->db->selectOne($sql, [$id]);
+        return $this->find($id);
     }
     
     /**
@@ -49,7 +48,7 @@ class AdAccount
         $data['created_at'] = date('Y-m-d H:i:s');
         $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return $this->db->insert($this->table, $data);
+        return parent::create($data);
     }
     
     /**
@@ -59,15 +58,15 @@ class AdAccount
     {
         $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return $this->db->update($this->table, $data, 'id = ?', [$id]);
+        return parent::update($id, $data);
     }
     
     /**
-     * 広告アカウントを削除
+     * 広告アカウントを削除（エイリアス）
      */
     public function delete($id)
     {
-        return $this->db->delete($this->table, 'id = ?', [$id]);
+        return parent::delete($id);
     }
     
     /**
@@ -86,7 +85,7 @@ class AdAccount
         
         $sql .= " GROUP BY platform";
         
-        return $this->db->select($sql, $params);
+        return $this->query($sql, $params);
     }
     
     /**
@@ -112,8 +111,8 @@ class AdAccount
             $params[] = $userId;
         }
         
-        $result = $this->db->selectOne($sql, $params);
-        return $result ? $result['count'] : 0;
+        $result = $this->query($sql, $params);
+        return $result ? $result[0]['count'] : 0;
     }
     
     /**
@@ -122,7 +121,8 @@ class AdAccount
     public function getByCustomerId($customerId)
     {
         $sql = "SELECT * FROM {$this->table} WHERE customer_id = ?";
-        return $this->db->selectOne($sql, [$customerId]);
+        $result = $this->query($sql, [$customerId]);
+        return $result ? $result[0] : null;
     }
     
     /**
@@ -160,9 +160,7 @@ class AdAccount
         $offset = ($page - 1) * $perPage;
         
         // 総件数を取得
-        $countSql = "SELECT COUNT(*) as total FROM {$this->table}";
-        $totalResult = $this->db->selectOne($countSql);
-        $total = $totalResult['total'];
+        $total = $this->count();
         
         // データを取得
         $sql = "SELECT aa.*, c.company_name as client_name
@@ -171,7 +169,7 @@ class AdAccount
                 ORDER BY aa.{$orderBy} {$order}
                 LIMIT {$perPage} OFFSET {$offset}";
         
-        $data = $this->db->select($sql);
+        $data = $this->query($sql);
         
         return [
             'data' => $data,
@@ -202,7 +200,7 @@ class AdAccount
         
         $sql .= " ORDER BY aa.created_at DESC";
         
-        return $this->db->select($sql, $params);
+        return $this->query($sql, $params);
     }
     
     /**
