@@ -27,6 +27,7 @@ class GoogleAdsService
     private ?GoogleAdsClient $googleAdsClient = null;
     private Logger $logger;
     private array $config;
+    private ?string $lastError = null;
     
     /**
      * コンストラクタ
@@ -443,6 +444,56 @@ class GoogleAdsService
     }
     
     /**
+     * すべての顧客アカウント情報を取得
+     * 
+     * @return array|false
+     */
+    public function getAllCustomersInfo()
+    {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoAccounts();
+        }
+        
+        try {
+            $accounts = $this->getAccessibleAccounts();
+            $customerInfos = [];
+            
+            foreach ($accounts as $account) {
+                $customerInfo = $this->getAccountInfo($account['customer_id']);
+                if ($customerInfo) {
+                    $customerInfos[] = [
+                        'id' => $account['customer_id'],
+                        'name' => $customerInfo['name'] ?? $account['name'] ?? 'Unknown Account',
+                        'currency' => $customerInfo['currency'] ?? 'JPY',
+                        'timezone' => $customerInfo['timezone'] ?? 'Asia/Tokyo',
+                        'status' => 'ENABLED',
+                        'is_manager' => $account['is_manager'] ?? false,
+                        'is_test_account' => $account['is_test_account'] ?? false
+                    ];
+                }
+            }
+            
+            return $customerInfos;
+            
+        } catch (Exception $e) {
+            $this->logger->error('Failed to get all customer info: ' . $e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
+    }
+    
+    /**
+     * 最後のエラーメッセージを取得
+     * 
+     * @return string
+     */
+    public function getLastError(): string
+    {
+        return $this->lastError ?? 'No error recorded';
+    }
+    
+    /**
      * デモ用アカウントリストを取得
      * 
      * @return array
@@ -451,18 +502,22 @@ class GoogleAdsService
     {
         return [
             [
+                'id' => '1234567890',
                 'customer_id' => '1234567890',
                 'name' => 'デモアカウント1',
                 'currency' => 'JPY',
                 'timezone' => 'Asia/Tokyo',
+                'status' => 'ENABLED',
                 'is_manager' => false,
                 'is_test_account' => true
             ],
             [
+                'id' => '0987654321',
                 'customer_id' => '0987654321',
                 'name' => 'デモアカウント2',
                 'currency' => 'JPY',
                 'timezone' => 'Asia/Tokyo',
+                'status' => 'ENABLED',
                 'is_manager' => false,
                 'is_test_account' => true
             ]
