@@ -123,5 +123,5 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php 
 $content = ob_get_clean();
 unset($_SESSION['old_input']);
-require_once '../views/layouts/app.php';
+require_once __DIR__ . '/../layouts/app.php';
 ?>

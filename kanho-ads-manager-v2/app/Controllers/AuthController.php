@@ -20,7 +20,7 @@ class AuthController
             return;
         }
         
-        require_once '../views/auth/login.php';
+        require_once __DIR__ . '/../../views/auth/login.php';
     }
     
     public function showRegister()
@@ -30,7 +30,7 @@ class AuthController
             return;
         }
         
-        require_once '../views/auth/register.php';
+        require_once __DIR__ . '/../../views/auth/register.php';
     }
     
     public function login()
@@ -231,7 +231,7 @@ class AuthController
             return;
         }
         
-        require_once '../views/auth/forgot-password.php';
+        require_once __DIR__ . '/../../views/auth/forgot-password.php';
     }
     
     public function forgotPassword()
@@ -284,7 +284,7 @@ class AuthController
             return;
         }
         
-        require_once '../views/auth/reset-password.php';
+        require_once __DIR__ . '/../../views/auth/reset-password.php';
     }
     
     public function resetPassword()
@@ -346,7 +346,7 @@ class AuthController
         
         $user = $this->userModel->find($_SESSION['user_id']);
         
-        require_once '../views/auth/profile.php';
+        require_once __DIR__ . '/../../views/auth/profile.php';
     }
     
     public function updateProfile()

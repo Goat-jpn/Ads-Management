@@ -41,7 +41,7 @@ class DashboardController
         // Pass data to view
         extract($stats);
         
-        require_once '../views/dashboard.php';
+        require_once __DIR__ . '/../../views/dashboard.php';
     }
     
     private function getDashboardStats()
