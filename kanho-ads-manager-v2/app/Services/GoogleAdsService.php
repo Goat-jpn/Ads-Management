@@ -83,6 +83,11 @@ class GoogleAdsService
      */
     public function getAccessibleAccounts(): array
     {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoAccounts();
+        }
+        
         try {
             if (!$this->googleAdsClient) {
                 throw new Exception('Google Ads client not initialized');
@@ -126,6 +131,11 @@ class GoogleAdsService
      */
     public function getAccountInfo(string $customerId): ?array
     {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoAccountInfo($customerId);
+        }
+        
         try {
             if (!$this->googleAdsClient) {
                 throw new Exception('Google Ads client not initialized');
@@ -177,6 +187,11 @@ class GoogleAdsService
      */
     public function getCampaigns(string $customerId): array
     {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoCampaigns($customerId);
+        }
+        
         try {
             if (!$this->googleAdsClient) {
                 throw new Exception('Google Ads client not initialized');
@@ -240,6 +255,11 @@ class GoogleAdsService
      */
     public function getAdGroups(string $customerId, string $campaignId): array
     {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoAdGroups($campaignId);
+        }
+        
         try {
             if (!$this->googleAdsClient) {
                 throw new Exception('Google Ads client not initialized');
@@ -301,6 +321,11 @@ class GoogleAdsService
      */
     public function getPerformanceSummary(string $customerId, string $dateRange = 'LAST_30_DAYS'): array
     {
+        // デモモードの場合、ダミーデータを返す
+        if (($_ENV['GOOGLE_ADS_DEMO_MODE'] ?? 'false') === 'true') {
+            return $this->getDemoPerformanceSummary($customerId, $dateRange);
+        }
+        
         try {
             if (!$this->googleAdsClient) {
                 throw new Exception('Google Ads client not initialized');
@@ -372,16 +397,33 @@ class GoogleAdsService
     /**
      * APIクライアントの動作確認
      * 
-     * @return bool
+     * @return array
      */
-    public function testConnection(): bool
+    public function testConnection(): array
     {
         try {
+            if (!$this->googleAdsClient) {
+                return [
+                    'success' => false,
+                    'message' => 'Google Ads client not initialized',
+                    'error_type' => 'client_init'
+                ];
+            }
+            
             $accounts = $this->getAccessibleAccounts();
-            return count($accounts) > 0;
+            return [
+                'success' => count($accounts) > 0,
+                'message' => count($accounts) > 0 ? 'Connection successful' : 'No accessible accounts found',
+                'account_count' => count($accounts),
+                'error_type' => count($accounts) > 0 ? null : 'no_accounts'
+            ];
         } catch (Exception $e) {
             $this->logger->error('Connection test failed: ' . $e->getMessage());
-            return false;
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_type' => 'exception'
+            ];
         }
     }
     
@@ -398,5 +440,145 @@ class GoogleAdsService
             return end($lines) ?: 'No log entries found';
         }
         return 'Log file not found';
+    }
+    
+    /**
+     * デモ用アカウントリストを取得
+     * 
+     * @return array
+     */
+    private function getDemoAccounts(): array
+    {
+        return [
+            [
+                'customer_id' => '1234567890',
+                'name' => 'デモアカウント1',
+                'currency' => 'JPY',
+                'timezone' => 'Asia/Tokyo',
+                'is_manager' => false,
+                'is_test_account' => true
+            ],
+            [
+                'customer_id' => '0987654321',
+                'name' => 'デモアカウント2',
+                'currency' => 'JPY',
+                'timezone' => 'Asia/Tokyo',
+                'is_manager' => false,
+                'is_test_account' => true
+            ]
+        ];
+    }
+    
+    /**
+     * デモ用アカウント情報を取得
+     * 
+     * @param string $customerId
+     * @return array|null
+     */
+    private function getDemoAccountInfo(string $customerId): ?array
+    {
+        return [
+            'customer_id' => $customerId,
+            'name' => 'デモアカウント - ' . $customerId,
+            'currency' => 'JPY',
+            'timezone' => 'Asia/Tokyo',
+            'is_manager' => false,
+            'is_test_account' => true
+        ];
+    }
+    
+    /**
+     * デモ用キャンペーンデータを取得
+     * 
+     * @param string $customerId
+     * @return array
+     */
+    private function getDemoCampaigns(string $customerId): array
+    {
+        return [
+            [
+                'campaign_id' => '11111111',
+                'name' => 'デモキャンペーン1',
+                'status' => 'ENABLED',
+                'channel_type' => 'SEARCH',
+                'start_date' => '2024-01-01',
+                'end_date' => null,
+                'impressions' => 10000,
+                'clicks' => 500,
+                'ctr' => 5.0,
+                'cost_micros' => 50000000000, // 50,000円
+                'average_cpc' => 100000000 // 100円
+            ],
+            [
+                'campaign_id' => '22222222',
+                'name' => 'デモキャンペーン2',
+                'status' => 'ENABLED',
+                'channel_type' => 'DISPLAY',
+                'start_date' => '2024-01-15',
+                'end_date' => null,
+                'impressions' => 25000,
+                'clicks' => 750,
+                'ctr' => 3.0,
+                'cost_micros' => 75000000000, // 75,000円
+                'average_cpc' => 100000000 // 100円
+            ]
+        ];
+    }
+    
+    /**
+     * デモ用広告グループデータを取得
+     * 
+     * @param string $campaignId
+     * @return array
+     */
+    private function getDemoAdGroups(string $campaignId): array
+    {
+        return [
+            [
+                'ad_group_id' => $campaignId . '01',
+                'name' => 'デモ広告グループ1',
+                'status' => 'ENABLED',
+                'cpc_bid_micros' => 150000000, // 150円
+                'impressions' => 5000,
+                'clicks' => 200,
+                'ctr' => 4.0,
+                'cost_micros' => 20000000000, // 20,000円
+                'average_cpc' => 100000000 // 100円
+            ],
+            [
+                'ad_group_id' => $campaignId . '02',
+                'name' => 'デモ広告グループ2',
+                'status' => 'ENABLED',
+                'cpc_bid_micros' => 120000000, // 120円
+                'impressions' => 3000,
+                'clicks' => 150,
+                'ctr' => 5.0,
+                'cost_micros' => 15000000000, // 15,000円
+                'average_cpc' => 100000000 // 100円
+            ]
+        ];
+    }
+    
+    /**
+     * デモ用パフォーマンスサマリーを取得
+     * 
+     * @param string $customerId
+     * @param string $dateRange
+     * @return array
+     */
+    private function getDemoPerformanceSummary(string $customerId, string $dateRange): array
+    {
+        return [
+            'impressions' => 35000,
+            'clicks' => 1250,
+            'ctr' => 3.57,
+            'cost_micros' => 125000000000, // 125,000円
+            'cost_yen' => 125000,
+            'average_cpc' => 100000000, // 100円
+            'conversions' => 62.5,
+            'conversion_rate' => 5.0,
+            'cost_per_conversion' => 2000000000, // 2,000円
+            'date_range' => $dateRange
+        ];
     }
 }

@@ -427,8 +427,9 @@ class AdAccountController
             $googleAdsService = new GoogleAdsService();
             
             // 接続テスト
-            if (!$googleAdsService->testConnection()) {
-                throw new \Exception('Google Ads APIへの接続に失敗しました。認証情報を確認してください。');
+            $connectionResult = $googleAdsService->testConnection();
+            if (!$connectionResult['success']) {
+                throw new \Exception('Google Ads APIへの接続に失敗しました: ' . $connectionResult['message']);
             }
             
             $customerId = $account['account_id'];
