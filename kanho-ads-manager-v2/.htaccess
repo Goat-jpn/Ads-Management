@@ -1,0 +1,72 @@
+# Kanho Ads Manager v2.0 - Apache Configuration
+
+RewriteEngine On
+
+# セキュリティヘッダー
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 静的ファイルの直接アクセス許可
+RewriteCond %{REQUEST_URI} ^/public/
+RewriteRule ^public/(.*)$ public/$1 [L]
+
+# 設定ファイル・ログファイルへのアクセス禁止
+<Files ~ "^(\.env|\.htaccess|composer\.(json|lock)|\.git)">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<FilesMatch "^(storage|config|database)/">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# PHPファイルへの直接アクセス制限（index.php以外）
+<FilesMatch "\.php$">
+    <RequireAll>
+        Require all denied
+        <RequireAny>
+            Require local
+            Require expr "%{REQUEST_URI} == '/index.php'"
+        </RequireAny>
+    </RequireAll>
+</FilesMatch>
+
+# すべてのリクエストをindex.phpに転送（ファイルが存在しない場合）
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# キャッシュ設定
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/ico "access plus 1 year"
+</IfModule>
+
+# gzip圧縮
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+</IfModule>
+
+# エラーページ設定
+ErrorDocument 404 /index.php
+ErrorDocument 403 /index.php
+ErrorDocument 500 /index.php
