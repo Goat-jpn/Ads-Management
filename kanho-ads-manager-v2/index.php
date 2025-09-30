@@ -100,6 +100,11 @@ $routes = [
         '/billing/create' => 'BillingController@create',
         '/billing/(\d+)' => 'BillingController@show',
         '/test-db' => 'TestController@database',
+        // 広告アカウント管理
+        '/ad-accounts' => 'AdAccountController@index',
+        '/ad-accounts/create' => 'AdAccountController@create',
+        '/ad-accounts/(\d+)' => 'AdAccountController@show',
+        '/ad-accounts/(\d+)/edit' => 'AdAccountController@edit',
     ],
     'POST' => [
         '/login' => 'AuthController@login',
@@ -109,6 +114,10 @@ $routes = [
         '/clients/(\d+)/delete' => 'ClientController@destroy',
         '/billing' => 'BillingController@store',
         '/billing/update-status' => 'BillingController@updateStatus',
+        // 広告アカウント管理
+        '/ad-accounts' => 'AdAccountController@store',
+        '/ad-accounts/(\d+)' => 'AdAccountController@update',
+        '/ad-accounts/(\d+)/delete' => 'AdAccountController@destroy',
     ]
 ];
 
@@ -121,10 +130,15 @@ if (strpos($path, '/api/') === 0) {
             '/api/dashboard/summary' => 'ApiController@dashboardSummary',
             '/api/clients' => 'ApiController@clients',
             '/api/billing/summary' => 'ApiController@billingSummary',
+            // 広告アカウント管理 API
+            '/api/ad-accounts/google' => 'AdAccountController@getGoogleAccounts',
+            '/api/ad-accounts/test-connection' => 'AdAccountController@testGoogleConnection',
         ],
         'POST' => [
             '/api/clients' => 'ApiController@storeClient',
             '/api/billing/status' => 'ApiController@updateBillingStatus',
+            // 広告アカウント管理 API
+            '/api/ad-accounts' => 'AdAccountController@apiStore',
         ]
     ];
     

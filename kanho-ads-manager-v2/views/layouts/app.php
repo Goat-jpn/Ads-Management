@@ -42,6 +42,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/ad-accounts">
+                            <i class="fas fa-ad me-1"></i> 広告アカウント
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/campaigns">
                             <i class="fas fa-bullhorn me-1"></i> キャンペーン
                         </a>
