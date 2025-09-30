@@ -208,6 +208,47 @@ if (!function_exists('format_currency')) {
     }
 }
 
+if (!function_exists('parse_tags')) {
+    /**
+     * JSONタグを文字列に変換
+     */
+    function parse_tags($jsonTags) {
+        if (empty($jsonTags)) {
+            return '';
+        }
+        
+        $tags = json_decode($jsonTags, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($tags)) {
+            return $jsonTags; // JSON解析に失敗した場合はそのまま返す
+        }
+        
+        return implode(', ', $tags);
+    }
+}
+
+if (!function_exists('format_tags')) {
+    /**
+     * タグのHTML表示用フォーマット
+     */
+    function format_tags($jsonTags) {
+        if (empty($jsonTags)) {
+            return '<span class="text-muted">-</span>';
+        }
+        
+        $tags = json_decode($jsonTags, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($tags)) {
+            return '<span class="badge bg-secondary">' . h($jsonTags) . '</span>';
+        }
+        
+        $output = [];
+        foreach ($tags as $tag) {
+            $output[] = '<span class="badge bg-info me-1">' . h($tag) . '</span>';
+        }
+        
+        return implode('', $output);
+    }
+}
+
 if (!function_exists('format_date')) {
     /**
      * 日付フォーマット

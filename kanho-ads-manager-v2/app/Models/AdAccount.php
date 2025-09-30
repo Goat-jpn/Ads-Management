@@ -9,145 +9,99 @@ class AdAccount extends Model
 {
     protected $table = 'ad_accounts';
     protected $fillable = [
-        'client_id', 'platform', 'account_name', 'account_id', 
-        'access_token', 'refresh_token', 'token_expires_at',
-        'currency', 'timezone', 'status', 'last_sync_at'
+        'client_id', 'platform', 'account_id', 'account_name', 'currency', 
+        'timezone', 'access_token', 'refresh_token', 'token_expires_at',
+        'last_sync', 'sync_enabled', 'status'
     ];
     
     protected $hidden = ['access_token', 'refresh_token'];
     
-    public function getByClient($clientId)
+    // プラットフォーム定数
+    const PLATFORM_GOOGLE = 'google';
+    const PLATFORM_YAHOO = 'yahoo';
+    
+    // ステータス定数
+    const STATUS_ACTIVE = 'active';
+    const STATUS_INACTIVE = 'inactive'; 
+    const STATUS_SUSPENDED = 'suspended';
+    
+    public function create($data)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE client_id = ? ORDER BY platform ASC, account_name ASC";
+        // デフォルト値を設定
+        $data['status'] = $data['status'] ?? self::STATUS_INACTIVE;
+        $data['sync_enabled'] = $data['sync_enabled'] ?? 1;
+        
+        return parent::create($data);
+    }
+    
+    /**
+     * クライアント別の広告アカウント一覧を取得
+     */
+    public function findByClient($clientId)
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE client_id = ? ORDER BY created_at DESC";
         $stmt = $this->db->getConnection()->prepare($sql);
         $stmt->execute([$clientId]);
         
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
     
-    public function getByPlatform($platform)
+    /**
+     * プラットフォーム別の広告アカウント一覧を取得
+     */
+    public function findByPlatform($platform)
     {
-        $sql = "SELECT aa.*, c.name as client_name 
-                FROM {$this->table} aa
-                JOIN clients c ON aa.client_id = c.id
-                WHERE aa.platform = ? 
-                ORDER BY c.name ASC, aa.account_name ASC";
-        
+        $sql = "SELECT * FROM {$this->table} WHERE platform = ? ORDER BY account_name ASC";
         $stmt = $this->db->getConnection()->prepare($sql);
         $stmt->execute([$platform]);
         
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
     
-    public function getActiveAccounts()
+    /**
+     * アクティブな広告アカウント一覧を取得
+     */
+    public function getActiveAccounts($clientId = null)
     {
-        $sql = "SELECT aa.*, c.name as client_name 
-                FROM {$this->table} aa
-                JOIN clients c ON aa.client_id = c.id
-                WHERE aa.status = 'active' 
-                ORDER BY c.name ASC, aa.platform ASC, aa.account_name ASC";
+        $sql = "SELECT aa.*, c.company_name 
+                FROM {$this->table} aa 
+                LEFT JOIN clients c ON aa.client_id = c.id 
+                WHERE aa.status = ?";
+        $params = [self::STATUS_ACTIVE];
+        
+        if ($clientId) {
+            $sql .= " AND aa.client_id = ?";
+            $params[] = $clientId;
+        }
+        
+        $sql .= " ORDER BY aa.account_name ASC";
         
         $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
-    public function getAccountsNeedingSync($hours = 24)
+    /**
+     * 同期が必要なアカウント一覧を取得
+     */
+    public function getAccountsNeedingSync($hoursOld = 24)
     {
-        $syncThreshold = date('Y-m-d H:i:s', strtotime("-{$hours} hours"));
-        
         $sql = "SELECT * FROM {$this->table} 
-                WHERE status = 'active' 
-                AND (last_sync_at IS NULL OR last_sync_at < ?)
-                ORDER BY last_sync_at ASC";
-        
+                WHERE sync_enabled = 1 
+                AND status = ? 
+                AND (last_sync IS NULL OR last_sync < DATE_SUB(NOW(), INTERVAL ? HOUR))
+                ORDER BY last_sync ASC";
+                
         $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$syncThreshold]);
+        $stmt->execute([self::STATUS_ACTIVE, $hoursOld]);
         
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->hideColumns($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
     
-    public function updateTokens($accountId, $accessToken, $refreshToken = null, $expiresAt = null)
-    {
-        $sql = "UPDATE {$this->table} SET 
-                access_token = ?, 
-                refresh_token = ?, 
-                token_expires_at = ?,
-                updated_at = NOW() 
-                WHERE id = ?";
-        
-        $stmt = $this->db->getConnection()->prepare($sql);
-        
-        return $stmt->execute([
-            $accessToken,
-            $refreshToken,
-            $expiresAt,
-            $accountId
-        ]);
-    }
-    
-    public function updateLastSyncAt($accountId)
-    {
-        $sql = "UPDATE {$this->table} SET last_sync_at = NOW(), updated_at = NOW() WHERE id = ?";
-        $stmt = $this->db->getConnection()->prepare($sql);
-        
-        return $stmt->execute([$accountId]);
-    }
-    
-    public function getAccountWithCampaigns($accountId)
-    {
-        $sql = "SELECT 
-                    aa.*,
-                    c.name as client_name,
-                    c.email as client_email
-                FROM {$this->table} aa
-                JOIN clients c ON aa.client_id = c.id
-                WHERE aa.id = ?";
-        
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$accountId]);
-        
-        $account = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$account) {
-            return null;
-        }
-        
-        // Get campaigns
-        $campaignsSql = "SELECT * FROM campaigns WHERE ad_account_id = ? ORDER BY name ASC";
-        $campaignsStmt = $this->db->getConnection()->prepare($campaignsSql);
-        $campaignsStmt->execute([$accountId]);
-        
-        $account['campaigns'] = $campaignsStmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        return $account;
-    }
-    
-    public function getTokensForSync($accountId)
-    {
-        $sql = "SELECT access_token, refresh_token, token_expires_at FROM {$this->table} WHERE id = ?";
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$accountId]);
-        
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    
-    public function isTokenExpired($accountId)
-    {
-        $sql = "SELECT token_expires_at FROM {$this->table} WHERE id = ?";
-        $stmt = $this->db->getConnection()->prepare($sql);
-        $stmt->execute([$accountId]);
-        
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$result || !$result['token_expires_at']) {
-            return true; // Assume expired if no expiration date
-        }
-        
-        return strtotime($result['token_expires_at']) <= time();
-    }
-    
+    /**
+     * アカウント統計情報を取得
+     */
     public function getAccountStats()
     {
         $sql = "SELECT 
@@ -156,19 +110,141 @@ class AdAccount extends Model
                     COUNT(*) as count
                 FROM {$this->table} 
                 GROUP BY platform, status
-                ORDER BY platform ASC, status ASC";
-        
+                ORDER BY platform, status";
+                
         $stmt = $this->db->getConnection()->prepare($sql);
         $stmt->execute();
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
-    public function updateStatus($accountId, $status)
+    /**
+     * アカウントの同期状態を更新
+     */
+    public function updateSyncStatus($accountId, $status = 'success', $errorMessage = null)
     {
-        $sql = "UPDATE {$this->table} SET status = ?, updated_at = NOW() WHERE id = ?";
-        $stmt = $this->db->getConnection()->prepare($sql);
+        $data = [
+            'last_sync' => date('Y-m-d H:i:s'),
+        ];
         
-        return $stmt->execute([$status, $accountId]);
+        if ($status === 'error' && $errorMessage) {
+            // エラーログ記録用の追加処理（将来実装）
+            error_log("Ad Account sync error for ID {$accountId}: {$errorMessage}");
+        }
+        
+        return $this->update($accountId, $data);
+    }
+    
+    /**
+     * プラットフォーム別のアカウント数を取得
+     */
+    public function countByPlatform()
+    {
+        $sql = "SELECT 
+                    platform,
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN status = 'active' THEN 1 END) as active
+                FROM {$this->table} 
+                GROUP BY platform";
+                
+        $stmt = $this->db->getConnection()->prepare($sql);
+        $stmt->execute();
+        
+        $result = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $result[$row['platform']] = [
+                'total' => (int)$row['total'],
+                'active' => (int)$row['active']
+            ];
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * アカウント検索
+     */
+    public function searchAccounts($query, $clientId = null)
+    {
+        $sql = "SELECT aa.*, c.company_name 
+                FROM {$this->table} aa 
+                LEFT JOIN clients c ON aa.client_id = c.id 
+                WHERE (aa.account_name LIKE ? OR aa.account_id LIKE ? OR c.company_name LIKE ?)";
+        $params = ["%{$query}%", "%{$query}%", "%{$query}%"];
+        
+        if ($clientId) {
+            $sql .= " AND aa.client_id = ?";
+            $params[] = $clientId;
+        }
+        
+        $sql .= " ORDER BY aa.account_name ASC";
+        
+        $stmt = $this->db->getConnection()->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * アクセストークンの暗号化保存
+     */
+    public function saveEncryptedTokens($accountId, $accessToken, $refreshToken = null, $expiresAt = null)
+    {
+        // 本番環境では適切な暗号化を実装
+        // 現在は開発用に平文で保存（セキュリティ注意）
+        
+        $data = [
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'token_expires_at' => $expiresAt
+        ];
+        
+        return $this->update($accountId, $data);
+    }
+    
+    /**
+     * 復号化されたアクセストークンを取得
+     */
+    public function getDecryptedTokens($accountId)
+    {
+        $account = $this->find($accountId);
+        
+        if (!$account) {
+            return null;
+        }
+        
+        // 本番環境では復号化処理を実装
+        return [
+            'access_token' => $account['access_token'],
+            'refresh_token' => $account['refresh_token'],
+            'expires_at' => $account['token_expires_at']
+        ];
+    }
+    
+    /**
+     * プラットフォーム名の日本語変換
+     */
+    public static function getPlatformName($platform)
+    {
+        $names = [
+            self::PLATFORM_GOOGLE => 'Google Ads',
+            self::PLATFORM_YAHOO => 'Yahoo Ads'
+        ];
+        
+        return $names[$platform] ?? $platform;
+    }
+    
+    /**
+     * ステータス名の日本語変換
+     */
+    public static function getStatusName($status)
+    {
+        $names = [
+            self::STATUS_ACTIVE => 'アクティブ',
+            self::STATUS_INACTIVE => '非アクティブ',
+            self::STATUS_SUSPENDED => '停止中'
+        ];
+        
+        return $names[$status] ?? $status;
     }
 }

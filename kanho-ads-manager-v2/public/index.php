@@ -182,11 +182,59 @@ $routes = [
     
     // クライアント管理
     'GET /clients' => function() {
-        if (!isset($_SESSION['user'])) {
-            header('Location: /login');
-            exit;
-        }
-        require_once __DIR__ . '/../views/clients/index.php';
+        require_once __DIR__ . '/../app/Controllers/ClientController.php';
+        $controller = new \App\Controllers\ClientController();
+        $controller->index();
+    },
+    
+    'GET /clients/create' => function() {
+        require_once __DIR__ . '/../app/Controllers/ClientController.php';
+        $controller = new \App\Controllers\ClientController();
+        $controller->create();
+    },
+    
+    'POST /clients/create' => function() {
+        require_once __DIR__ . '/../app/Controllers/ClientController.php';
+        $controller = new \App\Controllers\ClientController();
+        $controller->create();
+    },
+    
+    // 広告アカウント管理
+    'GET /ad-accounts' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->index();
+    },
+    
+    'GET /ad-accounts/create' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->create();
+    },
+    
+    'POST /ad-accounts/create' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->create();
+    },
+    
+    'GET /ad-accounts/sync' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->sync();
+    },
+    
+    // Google Ads API 連携
+    'GET /api/google-accounts' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->getGoogleAccounts();
+    },
+    
+    'GET /api/google-test' => function() {
+        require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+        $controller = new \App\Controllers\AdAccountController();
+        $controller->testGoogleConnection();
     },
     
     // 404 ハンドラー
@@ -251,6 +299,74 @@ if (isset($routes[$route])) {
                 $matched = true;
                 break;
             }
+        }
+    }
+    
+    // 特別なクライアント動的ルート処理
+    if (!$matched) {
+        // /clients/{id} パターン
+        if (preg_match('#^/clients/(\d+)$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/ClientController.php';
+            $controller = new \App\Controllers\ClientController();
+            $controller->show($matches[1]);
+            $matched = true;
+        }
+        // /clients/{id}/edit パターン  
+        elseif (preg_match('#^/clients/(\d+)/edit$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/ClientController.php';
+            $controller = new \App\Controllers\ClientController();
+            if ($requestMethod === 'POST') {
+                $controller->update($matches[1]);
+            } else {
+                $controller->edit($matches[1]);
+            }
+            $matched = true;
+        }
+        // /clients/{id}/delete パターン
+        elseif (preg_match('#^/clients/(\d+)/delete$#', $path, $matches) && $requestMethod === 'POST') {
+            require_once __DIR__ . '/../app/Controllers/ClientController.php';
+            $controller = new \App\Controllers\ClientController();
+            $controller->destroy($matches[1]);
+            $matched = true;
+        }
+        // /ad-accounts/{id} パターン
+        elseif (preg_match('#^/ad-accounts/(\d+)$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+            $controller = new \App\Controllers\AdAccountController();
+            $controller->show($matches[1]);
+            $matched = true;
+        }
+        // /ad-accounts/{id}/edit パターン
+        elseif (preg_match('#^/ad-accounts/(\d+)/edit$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+            $controller = new \App\Controllers\AdAccountController();
+            if ($requestMethod === 'POST') {
+                $controller->update($matches[1]);
+            } else {
+                $controller->edit($matches[1]);
+            }
+            $matched = true;
+        }
+        // /ad-accounts/{id}/sync パターン
+        elseif (preg_match('#^/ad-accounts/(\d+)/sync$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+            $controller = new \App\Controllers\AdAccountController();
+            $controller->sync($matches[1]);
+            $matched = true;
+        }
+        // /ad-accounts/{id}/auth パターン
+        elseif (preg_match('#^/ad-accounts/(\d+)/auth$#', $path, $matches)) {
+            require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+            $controller = new \App\Controllers\AdAccountController();
+            $controller->auth($matches[1]);
+            $matched = true;
+        }
+        // /ad-accounts/{id}/delete パターン
+        elseif (preg_match('#^/ad-accounts/(\d+)/delete$#', $path, $matches) && $requestMethod === 'POST') {
+            require_once __DIR__ . '/../app/Controllers/AdAccountController.php';
+            $controller = new \App\Controllers\AdAccountController();
+            $controller->destroy($matches[1]);
+            $matched = true;
         }
     }
     
