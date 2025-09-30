@@ -75,23 +75,16 @@ class AuthController
         }
         
         // Verify password
-        if (!$this->userModel->verifyPassword($password, $user['password'])) {
+        if (!$this->userModel->verifyPassword($password, $user['password_hash'])) {
             $_SESSION['errors'] = ['Invalid email or password'];
             $_SESSION['old_input'] = ['email' => $email];
             redirect('/login');
             return;
         }
         
-        // Check if user is active
-        if (!$user['is_active']) {
-            $_SESSION['errors'] = ['Account is inactive. Please contact administrator.'];
-            redirect('/login');
-            return;
-        }
-        
         // Login successful - set session
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_name'] = $user['name'];
+        $_SESSION['user_name'] = ($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '');
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['logged_in'] = true;
@@ -112,7 +105,7 @@ class AuthController
         unset($_SESSION['errors'], $_SESSION['old_input']);
         
         // Set success message
-        flash('success', 'Login successful! Welcome back, ' . $user['name']);
+        flash('success', 'Login successful! Welcome back, ' . trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')));
         
         // Redirect to intended page or dashboard
         $intended = $_SESSION['intended_url'] ?? '/dashboard';
@@ -128,7 +121,8 @@ class AuthController
             return;
         }
         
-        $name = trim($_POST['name'] ?? '');
+        $firstName = trim($_POST['first_name'] ?? '');
+        $lastName = trim($_POST['last_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $passwordConfirm = $_POST['password_confirm'] ?? '';
@@ -136,10 +130,16 @@ class AuthController
         // Validate input
         $errors = [];
         
-        if (empty($name)) {
-            $errors[] = 'Name is required';
-        } elseif (strlen($name) < 2) {
-            $errors[] = 'Name must be at least 2 characters';
+        if (empty($firstName)) {
+            $errors[] = 'First name is required';
+        } elseif (strlen($firstName) < 1) {
+            $errors[] = 'First name must be at least 1 character';
+        }
+        
+        if (empty($lastName)) {
+            $errors[] = 'Last name is required';
+        } elseif (strlen($lastName) < 1) {
+            $errors[] = 'Last name must be at least 1 character';
         }
         
         if (empty($email)) {
@@ -164,33 +164,34 @@ class AuthController
         
         if (!empty($errors)) {
             $_SESSION['errors'] = $errors;
-            $_SESSION['old_input'] = ['name' => $name, 'email' => $email];
+            $_SESSION['old_input'] = ['first_name' => $firstName, 'last_name' => $lastName, 'email' => $email];
             redirect('/register');
             return;
         }
         
         // Create user
         $userData = [
-            'name' => $name,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'email' => $email,
             'password' => $password, // Will be hashed in the model
             'role' => 'user',
-            'is_active' => 1
+            'email_verified' => 1 // Auto-verify for demo purposes
         ];
         
         $userId = $this->userModel->create($userData);
         
         if (!$userId) {
             $_SESSION['errors'] = ['Failed to create account. Please try again.'];
-            $_SESSION['old_input'] = ['name' => $name, 'email' => $email];
+            $_SESSION['old_input'] = ['first_name' => $firstName, 'last_name' => $lastName, 'email' => $email];
             redirect('/register');
             return;
         }
         
         // Auto-login the user
-        $user = $this->userModel->find($userId);
+        $user = $this->userModel->findByEmail($email);
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_name'] = $user['name'];
+        $_SESSION['user_name'] = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['logged_in'] = true;

@@ -52,7 +52,7 @@ if (!function_exists('base_path')) {
      * ベースパス取得
      */
     function base_path($path = '') {
-        return __DIR__ . '/../../' . ltrim($path, '/');
+        return __DIR__ . '/../../' . ltrim($path ?? '', '/');
     }
 }
 
@@ -61,7 +61,7 @@ if (!function_exists('public_path')) {
      * publicパス取得
      */
     function public_path($path = '') {
-        return base_path('public/' . ltrim($path, '/'));
+        return base_path('public/' . ltrim($path ?? '', '/'));
     }
 }
 
@@ -70,7 +70,7 @@ if (!function_exists('storage_path')) {
      * storageパス取得
      */
     function storage_path($path = '') {
-        return base_path('storage/' . ltrim($path, '/'));
+        return base_path('storage/' . ltrim($path ?? '', '/'));
     }
 }
 
@@ -79,8 +79,8 @@ if (!function_exists('asset')) {
      * アセットURL生成
      */
     function asset($path) {
-        $baseUrl = rtrim(config('app.url'), '/');
-        return $baseUrl . '/' . ltrim($path, '/');
+        $baseUrl = rtrim(config('app.url') ?? '', '/');
+        return $baseUrl . '/' . ltrim($path ?? '', '/');
     }
 }
 
@@ -89,8 +89,8 @@ if (!function_exists('url')) {
      * URL生成
      */
     function url($path = '') {
-        $baseUrl = rtrim(config('app.url'), '/');
-        return $baseUrl . '/' . ltrim($path, '/');
+        $baseUrl = rtrim(config('app.url') ?? '', '/');
+        return $baseUrl . '/' . ltrim($path ?? '', '/');
     }
 }
 

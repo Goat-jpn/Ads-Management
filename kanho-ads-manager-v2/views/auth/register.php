@@ -16,17 +16,34 @@ ob_start();
                 <form method="POST" action="/register" novalidate>
                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
                     
-                    <div class="mb-3">
-                        <label for="name" class="form-label">お名前 <span class="text-danger">*</span></label>
-                        <input 
-                            type="text" 
-                            class="form-control" 
-                            id="name" 
-                            name="name" 
-                            value="<?= h($_SESSION['old_input']['name'] ?? '') ?>"
-                            required
-                            autofocus
-                        >
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="first_name" class="form-label">名 <span class="text-danger">*</span></label>
+                                <input 
+                                    type="text" 
+                                    class="form-control" 
+                                    id="first_name" 
+                                    name="first_name" 
+                                    value="<?= h($_SESSION['old_input']['first_name'] ?? '') ?>"
+                                    required
+                                    autofocus
+                                >
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_name" class="form-label">姓 <span class="text-danger">*</span></label>
+                                <input 
+                                    type="text" 
+                                    class="form-control" 
+                                    id="last_name" 
+                                    name="last_name" 
+                                    value="<?= h($_SESSION['old_input']['last_name'] ?? '') ?>"
+                                    required
+                                >
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mb-3">

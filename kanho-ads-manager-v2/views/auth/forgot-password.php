@@ -1,22 +1,24 @@
 <?php 
-$title = 'パスワードリセット';
+$title = 'パスワード忘れ';
 ob_start();
 ?>
 
 <div class="row justify-content-center">
     <div class="col-md-6 col-lg-4">
         <div class="card shadow">
-            <div class="card-header text-center bg-info text-white">
+            <div class="card-header text-center bg-warning text-dark">
                 <h4 class="mb-0">
                     <i class="fas fa-key me-2"></i>
-                    パスワードリセット
+                    パスワード忘れ
                 </h4>
             </div>
             <div class="card-body p-4">
-                <p class="text-muted text-center mb-4">
-                    登録したメールアドレスを入力してください。<br>
-                    パスワードリセットのリンクをお送りします。
-                </p>
+                <div class="text-center mb-4">
+                    <p class="text-muted">
+                        登録したメールアドレスを入力してください。<br>
+                        パスワードリセット用のリンクをお送りします。
+                    </p>
+                </div>
                 
                 <form method="POST" action="/forgot-password" novalidate>
                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
@@ -35,7 +37,7 @@ ob_start();
                     </div>
                     
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-info">
+                        <button type="submit" class="btn btn-warning">
                             <i class="fas fa-paper-plane me-2"></i>
                             リセットリンクを送信
                         </button>
@@ -45,9 +47,16 @@ ob_start();
                 <hr class="my-4">
                 
                 <div class="text-center">
+                    <span class="text-muted">パスワードを思い出しましたか？</span>
                     <a href="/login" class="text-decoration-none">
-                        <i class="fas fa-arrow-left me-1"></i>
-                        ログインに戻る
+                        ログイン
+                    </a>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <span class="text-muted">アカウントをお持ちでないですか？</span>
+                    <a href="/register" class="text-decoration-none">
+                        新規登録
                     </a>
                 </div>
             </div>
