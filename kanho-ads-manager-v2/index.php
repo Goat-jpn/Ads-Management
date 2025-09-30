@@ -38,6 +38,9 @@ if (file_exists(__DIR__ . '/.env')) {
 // ヘルパー関数読み込み
 require_once __DIR__ . '/app/Helpers/functions.php';
 
+// データベース設定読み込み
+require_once __DIR__ . '/config/database.php';
+
 // 基本設定
 $config = require __DIR__ . '/config/app.php';
 
@@ -171,7 +174,9 @@ function matchRoute($path, $method, $routes) {
     }
     
     foreach ($routes[$method] as $routePath => $controller) {
-        $pattern = preg_replace('/\\\(\([^)]+\))/', '([^/]+)', preg_quote($routePath, '/'));
+        // Convert route parameters like (\d+) to regex groups
+        $pattern = preg_quote($routePath, '/');
+        $pattern = str_replace('\(\\\d\+\)', '(\d+)', $pattern);
         $pattern = '/^' . $pattern . '$/';
         
         if (preg_match($pattern, $path, $matches)) {

@@ -7,6 +7,9 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Load database class
+require_once __DIR__ . '/../config/database.php';
+
 // Load environment variables
 if (file_exists(__DIR__ . '/../.env')) {
     $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);

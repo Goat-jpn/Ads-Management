@@ -62,7 +62,7 @@ class TestController
                             <div class="card-body">
                                 <?php
                                 try {
-                                    $db = Database::getInstance();
+                                    $db = \Database::getInstance();
                                     $result = $db->testConnection();
                                     
                                     if ($result['success']) {
