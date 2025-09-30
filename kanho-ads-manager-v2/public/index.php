@@ -168,6 +168,15 @@ $routes = [
             header('Location: /login');
             exit;
         }
+        
+        // ダッシュボード用の基本データを準備
+        $clientCount = 0;
+        $activeCampaigns = 0;
+        $monthlyAdSpend = 0;
+        $unpaidAmount = 0;
+        $recentClients = [];
+        
+        // 未実装モデルのため、仮の値を設定
         require_once __DIR__ . '/../views/dashboard.php';
     },
     

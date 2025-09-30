@@ -84,10 +84,18 @@ class AuthController
         
         // Login successful - set session
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_name'] = ($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '');
+        $_SESSION['user_name'] = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['logged_in'] = true;
+        
+        // Set user array for is_logged_in() compatibility
+        $_SESSION['user'] = [
+            'id' => $user['id'],
+            'name' => trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')),
+            'email' => $user['email'],
+            'role' => $user['role']
+        ];
         
         // Update last login
         $this->userModel->updateLastLoginAt($user['id']);
@@ -195,6 +203,14 @@ class AuthController
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['logged_in'] = true;
+        
+        // Set user array for is_logged_in() compatibility
+        $_SESSION['user'] = [
+            'id' => $user['id'],
+            'name' => trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')),
+            'email' => $user['email'],
+            'role' => $user['role']
+        ];
         
         // Clear old input
         unset($_SESSION['errors'], $_SESSION['old_input']);
