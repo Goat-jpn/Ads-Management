@@ -90,6 +90,14 @@ class AdAccount
     }
     
     /**
+     * プラットフォーム別統計（エイリアス）
+     */
+    public function countByPlatform($userId = null)
+    {
+        return $this->getCountByPlatform($userId);
+    }
+    
+    /**
      * アクティブなアカウント数を取得
      */
     public function getActiveCount($userId = null)
@@ -142,6 +150,59 @@ class AdAccount
             'customer_id' => 'required|max:255',
             'status' => 'in:active,inactive,suspended',
         ];
+    }
+    
+    /**
+     * ページネーション機能
+     */
+    public function paginate($page = 1, $perPage = 10, $orderBy = 'created_at', $order = 'DESC')
+    {
+        $offset = ($page - 1) * $perPage;
+        
+        // 総件数を取得
+        $countSql = "SELECT COUNT(*) as total FROM {$this->table}";
+        $totalResult = $this->db->selectOne($countSql);
+        $total = $totalResult['total'];
+        
+        // データを取得
+        $sql = "SELECT aa.*, c.company_name as client_name
+                FROM {$this->table} aa
+                LEFT JOIN clients c ON aa.client_id = c.id
+                ORDER BY aa.{$orderBy} {$order}
+                LIMIT {$perPage} OFFSET {$offset}";
+        
+        $data = $this->db->select($sql);
+        
+        return [
+            'data' => $data,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'total_pages' => ceil($total / $perPage),
+            'has_more' => ($offset + $perPage) < $total
+        ];
+    }
+    
+    /**
+     * アカウント検索
+     */
+    public function searchAccounts($search, $clientId = null)
+    {
+        $sql = "SELECT aa.*, c.company_name as client_name
+                FROM {$this->table} aa
+                LEFT JOIN clients c ON aa.client_id = c.id
+                WHERE (aa.account_name LIKE ? OR aa.customer_id LIKE ? OR c.company_name LIKE ?)";
+        
+        $params = ["%{$search}%", "%{$search}%", "%{$search}%"];
+        
+        if ($clientId) {
+            $sql .= " AND aa.client_id = ?";
+            $params[] = $clientId;
+        }
+        
+        $sql .= " ORDER BY aa.created_at DESC";
+        
+        return $this->db->select($sql, $params);
     }
     
     /**

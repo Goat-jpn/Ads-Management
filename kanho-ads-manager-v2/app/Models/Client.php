@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Core\Model;
 use PDO;
 
-class Client extends Model
+class Client
 {
+    private $db;
     protected $table = 'clients';
     protected $fillable = [
         'user_id', 'company_name', 'contact_person', 'email', 'phone', 
@@ -15,13 +15,26 @@ class Client extends Model
     
     protected $hidden = [];
     
+    public function __construct()
+    {
+        $this->db = \Database::getInstance();
+    }
+    
+    public function find($id)
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
+        return $this->db->selectOne($sql, [$id]);
+    }
+    
     public function create($data)
     {
         // デフォルト値を設定
         $data['status'] = $data['status'] ?? 'active';
         $data['user_id'] = $data['user_id'] ?? $_SESSION['user_id'] ?? 1;
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $data['updated_at'] = date('Y-m-d H:i:s');
         
-        return parent::create($data);
+        return $this->db->insert($this->table, $data);
     }
     
     public function findByUser($userId)
